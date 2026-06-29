@@ -75,7 +75,7 @@ export default function ReportsView({ guesthouseId }: ReportsProps) {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4" id="report-scorecard">
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm" id="rep-kpi-rev">
           <span className="text-[10px] font-bold text-gray-500 block uppercase tracking-wider">Total Revenue</span>
-          <span className="text-2xl font-black text-gray-900 mt-1 block">${report.summary.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+          <span className="text-2xl font-black text-gray-900 mt-1 block">P{report.summary.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
           <span className="text-[10px] text-gray-400 font-medium block mt-1">Nights sold x occupancy rates</span>
         </div>
 
@@ -90,7 +90,7 @@ export default function ReportsView({ guesthouseId }: ReportsProps) {
             <span className="text-[10px] font-bold text-gray-500 block uppercase tracking-wider">Average Daily Rate (ADR)</span>
             <HelpCircle className="h-3 w-3 text-gray-400" title="Average Revenue collected per occupied room per day" />
           </div>
-          <span className="text-2xl font-black text-gray-900 mt-1 block">${report.summary.averageDailyRate.toFixed(2)}</span>
+          <span className="text-2xl font-black text-gray-900 mt-1 block">P{report.summary.averageDailyRate.toFixed(2)}</span>
           <span className="text-[10px] text-gray-400 font-medium block mt-1">Average nightly rate paid</span>
         </div>
 
@@ -99,7 +99,7 @@ export default function ReportsView({ guesthouseId }: ReportsProps) {
             <span className="text-[10px] font-bold text-gray-500 block uppercase tracking-wider">RevPAR</span>
             <HelpCircle className="h-3 w-3 text-gray-400" title="Revenue Per Available Room" />
           </div>
-          <span className="text-2xl font-black text-teal-600 mt-1 block">${report.summary.revenuePerAvailableRoom.toFixed(2)}</span>
+          <span className="text-2xl font-black text-teal-600 mt-1 block">P{report.summary.revenuePerAvailableRoom.toFixed(2)}</span>
           <span className="text-[10px] text-gray-400 font-medium block mt-1">Total revenue / total available rooms</span>
         </div>
       </div>
@@ -129,8 +129,8 @@ export default function ReportsView({ guesthouseId }: ReportsProps) {
                     <td className="p-3 font-semibold text-gray-800">{row.room}</td>
                     <td className="p-3 text-gray-600 font-mono font-medium">{row.bookingsCount}</td>
                     <td className="p-3 text-gray-500 font-mono font-medium">{row.nightsSold} nights</td>
-                    <td className="p-3 text-gray-500 font-semibold">${row.averageRatePerNight.toFixed(2)}</td>
-                    <td className="p-3 text-right font-black text-gray-950">${row.revenueCollected.toFixed(2)}</td>
+                    <td className="p-3 text-gray-500 font-semibold">P{row.averageRatePerNight.toFixed(2)}</td>
+                    <td className="p-3 text-right font-black text-gray-950">P{row.revenueCollected.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>

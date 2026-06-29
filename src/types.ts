@@ -8,6 +8,8 @@ export interface Guesthouse {
   whatsappBusinessId?: string;
   subscriptionStatus: string;
   subscriptionEndsAt?: string;
+  rooms?: string[];
+  reviewTriggerTime?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -44,6 +46,9 @@ export interface Customer {
   email?: string;
   phone: string;
   optInPromo: boolean;
+  gender?: 'MALE' | 'FEMALE' | 'OTHER';
+  ageGroup?: '18-25' | '26-35' | '36-50' | '50+';
+  groupStyle?: 'COUPLE' | 'SINGLE' | 'FAMILY';
   createdAt: string;
 }
 

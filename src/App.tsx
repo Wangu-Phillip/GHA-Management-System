@@ -501,7 +501,9 @@ export default function App() {
                 <BookingsView
                   bookings={bookings}
                   guesthouseId={guesthouse.id}
+                  guesthouse={guesthouse}
                   onRefresh={handleDataRefresh}
+                  onUpdateGuesthouse={(updatedGh) => setGuesthouse(updatedGh)}
                 />
               )}
 
@@ -512,6 +514,7 @@ export default function App() {
                   guesthouse={guesthouse}
                   guesthouseId={guesthouse.id}
                   optInCount={customers.filter((c) => c.optInPromo).length}
+                  customers={customers}
                   onRefresh={handleDataRefresh}
                   onUpdateGuesthouse={(updatedGh) => setGuesthouse(updatedGh)}
                 />

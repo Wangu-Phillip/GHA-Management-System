@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Campaign, MessageLog, Guesthouse } from '../types';
+import { Campaign, MessageLog, Guesthouse, Customer } from '../types';
 import { Send, Settings, Sparkles, MessageSquare, ShieldAlert, History, Key, CheckCircle, RefreshCw, Smartphone } from 'lucide-react';
 
 interface MarketingProps {
@@ -8,6 +8,7 @@ interface MarketingProps {
   guesthouse: Guesthouse;
   guesthouseId: string;
   optInCount: number;
+  customers: Customer[];
   onRefresh: () => Promise<void>;
   onUpdateGuesthouse: (gh: Guesthouse) => void;
 }
@@ -18,6 +19,7 @@ export default function MarketingView({
   guesthouse,
   guesthouseId,
   optInCount,
+  customers = [],
   onRefresh,
   onUpdateGuesthouse
 }: MarketingProps) {
@@ -281,6 +283,26 @@ export default function MarketingView({
               </div>
 
               <form onSubmit={sendQuickText} className="space-y-4" id="quick-form">
+                <div className="space-y-1" id="field-quick-customer-select">
+                  <label className="text-xs font-bold text-gray-500">SELECT CONSENTED CUSTOMER</label>
+                  <select
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val) {
+                        setQuickPhone(val);
+                      }
+                    }}
+                    className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none bg-white text-gray-700"
+                  >
+                    <option value="">-- Or select from consented customers --</option>
+                    {customers.filter(c => c.optInPromo).map(c => (
+                      <option key={c.id} value={c.phone}>
+                        {c.name} ({c.phone})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="space-y-1" id="field-quick-phone">
                   <label className="text-xs font-bold text-gray-500">RECIPIENT PHONE (WITH COUNTRY CODE)</label>
                   <input
@@ -340,9 +362,41 @@ export default function MarketingView({
               <span className="text-[10px] font-bold text-gray-500 block uppercase">Simulated Response Rate</span>
               <span className="text-2xl font-extrabold text-teal-600 block mt-1">68%</span>
             </div>
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100" id="stat-reviews-frequency">
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 flex flex-col justify-between" id="stat-reviews-frequency">
               <span className="text-[10px] font-bold text-gray-500 block uppercase">Trigger Time</span>
-              <span className="text-xs font-bold text-gray-800 block mt-3">Day of Checkout (11:00 AM)</span>
+              <div className="mt-2 flex items-center gap-1.5">
+                <span className="text-xs text-gray-400 font-medium">Scan checkouts at:</span>
+                <select
+                  value={guesthouse.reviewTriggerTime || '11:00 AM'}
+                  onChange={async (e) => {
+                    const newTime = e.target.value;
+                    try {
+                      const response = await fetch('/api/marketing/whatsapp-settings', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          guesthouseId: guesthouse.id,
+                          reviewTriggerTime: newTime,
+                        })
+                      });
+                      if (response.ok) {
+                        const res = await response.json();
+                        onUpdateGuesthouse(res.guesthouse);
+                      } else {
+                        alert('Failed to save trigger time');
+                      }
+                    } catch (err) {
+                      console.error('Failed to update trigger time:', err);
+                    }
+                  }}
+                  className="px-2 py-1 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-800 focus:outline-none"
+                  id="trigger-time-select"
+                >
+                  {['08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM'].map(time => (
+                    <option key={time} value={time}>{time}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 

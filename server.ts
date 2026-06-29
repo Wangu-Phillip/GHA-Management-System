@@ -341,7 +341,7 @@ app.get('/api/customers', async (c) => {
 
 app.post('/api/customers', async (c) => {
   try {
-    const { guesthouseId, name, email, phone, optInPromo } = await c.req.json();
+    const { guesthouseId, name, email, phone, optInPromo, gender, ageGroup, groupStyle } = await c.req.json();
     if (!guesthouseId || !name || !phone) {
       return c.json({ error: 'guesthouseId, name, and phone are required' }, 400);
     }
@@ -352,6 +352,9 @@ app.post('/api/customers', async (c) => {
       email,
       phone,
       optInPromo: !!optInPromo,
+      gender,
+      ageGroup,
+      groupStyle
     });
     return c.json(customer, 201);
   } catch (err: any) {
@@ -454,15 +457,19 @@ app.post('/api/marketing/whatsapp-send', async (c) => {
 
 app.put('/api/marketing/whatsapp-settings', async (c) => {
   try {
-    const { guesthouseId, whatsappPhoneId, whatsappToken, whatsappBusinessId } = await c.req.json();
+    const { guesthouseId, whatsappPhoneId, whatsappToken, whatsappBusinessId, rooms, reviewTriggerTime } = await c.req.json();
     if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
 
-    const updated = await memoryDb.guesthouse.update(guesthouseId, {
+    const updateData: any = {
       whatsappPhoneId,
       whatsappToken,
       whatsappBusinessId,
-    });
-    return c.json({ message: 'WhatsApp numbers and Meta configurations updated successfully', guesthouse: updated });
+    };
+    if (rooms) updateData.rooms = rooms;
+    if (reviewTriggerTime) updateData.reviewTriggerTime = reviewTriggerTime;
+
+    const updated = await memoryDb.guesthouse.update(guesthouseId, updateData);
+    return c.json({ message: 'Guesthouse marketing settings and custom properties updated successfully', guesthouse: updated });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }

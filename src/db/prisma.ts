@@ -31,6 +31,8 @@ export interface GuesthouseData {
   whatsappBusinessId?: string;
   subscriptionStatus: string;
   subscriptionEndsAt?: Date;
+  rooms?: string[];
+  reviewTriggerTime?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -69,6 +71,9 @@ export interface CustomerData {
   email?: string;
   phone: string;
   optInPromo: boolean;
+  gender?: 'MALE' | 'FEMALE' | 'OTHER';
+  ageGroup?: '18-25' | '26-35' | '36-50' | '50+';
+  groupStyle?: 'COUPLE' | 'SINGLE' | 'FAMILY';
   createdAt: Date;
 }
 
@@ -104,6 +109,8 @@ const mockGuesthouses: GuesthouseData[] = [
     whatsappBusinessId: '984501920392019',
     subscriptionStatus: 'ACTIVE',
     subscriptionEndsAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days from now
+    rooms: ['Suite 101 - Oak Haven', 'Room 202 - Pine view', 'Room 203 - Cozy Studio'],
+    reviewTriggerTime: '11:00 AM',
     createdAt: new Date('2026-01-10T12:00:00Z'),
     updatedAt: new Date('2026-01-10T12:00:00Z'),
   },
@@ -111,10 +118,12 @@ const mockGuesthouses: GuesthouseData[] = [
     id: 'tenant-2',
     name: 'Ocean Breeze Retreat',
     whatsappPhoneId: '204958102930495',
-    whatsappToken: 'EAAGb0ZD...',
+    whatsappToken: 'EAAGb0ZC...',
     whatsappBusinessId: '874950291039203',
     subscriptionStatus: 'ACTIVE',
     subscriptionEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+    rooms: ['Beachfront Cabin A', 'Horizon Suite', 'Standard Queen Room 5'],
+    reviewTriggerTime: '12:00 PM',
     createdAt: new Date('2026-02-15T12:00:00Z'),
     updatedAt: new Date('2026-02-15T12:00:00Z'),
   },
@@ -123,6 +132,8 @@ const mockGuesthouses: GuesthouseData[] = [
     name: 'Golden Valley Inn',
     subscriptionStatus: 'PAST_DUE',
     subscriptionEndsAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
+    rooms: ['Deluxe Cabin 3', 'Valley View King 10', 'Sunset Studio'],
+    reviewTriggerTime: '10:00 AM',
     createdAt: new Date('2026-03-01T12:00:00Z'),
     updatedAt: new Date('2026-03-01T12:00:00Z'),
   },
@@ -571,6 +582,9 @@ export const memoryDb = {
         existing.name = data.name;
         existing.email = data.email || existing.email;
         existing.optInPromo = data.optInPromo !== undefined ? data.optInPromo : existing.optInPromo;
+        if (data.gender) existing.gender = data.gender;
+        if (data.ageGroup) existing.ageGroup = data.ageGroup;
+        if (data.groupStyle) existing.groupStyle = data.groupStyle;
         return existing;
       }
       const newCust: CustomerData = {
@@ -580,6 +594,9 @@ export const memoryDb = {
         email: data.email,
         phone: phoneClean,
         optInPromo: !!data.optInPromo,
+        gender: data.gender,
+        ageGroup: data.ageGroup,
+        groupStyle: data.groupStyle,
         createdAt: new Date(),
       };
       mockCustomers.push(newCust);

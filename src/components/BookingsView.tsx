@@ -1,27 +1,87 @@
 import React, { useState, useRef } from 'react';
-import { Calendar, PlusCircle, Search, Upload, CheckCircle2, Trash2, ArrowUpRight, HelpCircle } from 'lucide-react';
-import { Booking } from '../types';
+import { Calendar, PlusCircle, Search, Upload, CheckCircle2, Trash2, ArrowUpRight, HelpCircle, Settings, X } from 'lucide-react';
+import { Booking, Guesthouse } from '../types';
 
 interface BookingsViewProps {
   bookings: Booking[];
   guesthouseId: string;
+  guesthouse: Guesthouse;
   onRefresh: () => Promise<void>;
+  onUpdateGuesthouse: (gh: Guesthouse) => void;
 }
 
-export default function BookingsView({ bookings, guesthouseId, onRefresh }: BookingsViewProps) {
+export default function BookingsView({ bookings, guesthouseId, guesthouse, onRefresh, onUpdateGuesthouse }: BookingsViewProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showRoomsModal, setShowRoomsModal] = useState(false);
+  const [newRoomInput, setNewRoomInput] = useState('');
+  const [updatingRooms, setUpdatingRooms] = useState(false);
+
+  const roomsList = guesthouse?.rooms && guesthouse.rooms.length > 0 ? guesthouse.rooms : [
+    'Suite 101 - Oak Haven',
+    'Room 202 - Pine view',
+    'Room 203 - Cozy Studio',
+    'Beachfront Cabin A',
+    'Horizon Suite'
+  ];
+
+  const handleRoomAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRoomInput.trim()) return;
+    setUpdatingRooms(true);
+    try {
+      const updatedRooms = [...roomsList, newRoomInput.trim()];
+      const response = await fetch('/api/marketing/whatsapp-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guesthouseId, rooms: updatedRooms }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        onUpdateGuesthouse(data.guesthouse);
+        setNewRoomInput('');
+      } else {
+        alert('Failed to add custom room');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setUpdatingRooms(false);
+    }
+  };
+
+  const handleRoomDelete = async (roomToDelete: string) => {
+    setUpdatingRooms(true);
+    try {
+      const updatedRooms = roomsList.filter(r => r !== roomToDelete);
+      const response = await fetch('/api/marketing/whatsapp-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guesthouseId, rooms: updatedRooms }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        onUpdateGuesthouse(data.guesthouse);
+      } else {
+        alert('Failed to delete room');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setUpdatingRooms(false);
+    }
+  };
 
   // New Booking form states
   const [formData, setFormData] = useState({
     customerName: '',
     customerEmail: '',
     customerPhone: '',
-    roomName: 'Suite 101 - Oak Haven',
+    roomName: roomsList[0],
     checkIn: '',
     checkOut: '',
     totalAmount: '',
@@ -270,7 +330,28 @@ export default function BookingsView({ bookings, guesthouseId, onRefresh }: Book
           </button>
 
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => setShowRoomsModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-100 hover:bg-gray-50 text-gray-700 rounded-xl text-xs font-semibold shadow-sm transition-colors"
+            id="manage-rooms-btn"
+          >
+            <Settings className="h-4 w-4" />
+            Manage Rooms
+          </button>
+
+          <button
+            onClick={() => {
+              setFormData({
+                customerName: '',
+                customerEmail: '',
+                customerPhone: '',
+                roomName: roomsList[0] || '',
+                checkIn: '',
+                checkOut: '',
+                totalAmount: '',
+                status: 'CONFIRMED'
+              });
+              setShowAddModal(true);
+            }}
             className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
             id="add-booking-btn"
           >
@@ -420,11 +501,9 @@ export default function BookingsView({ bookings, guesthouseId, onRefresh }: Book
                     onChange={(e) => setFormData({ ...formData, roomName: e.target.value })}
                     className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none bg-white"
                   >
-                    <option value="Suite 101 - Oak Haven">Suite 101 - Oak Haven</option>
-                    <option value="Room 202 - Pine view">Room 202 - Pine view</option>
-                    <option value="Room 203 - Cozy Studio">Room 203 - Cozy Studio</option>
-                    <option value="Beachfront Cabin A">Beachfront Cabin A</option>
-                    <option value="Horizon Suite">Horizon Suite</option>
+                    {roomsList.map(room => (
+                      <option key={room} value={room}>{room}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="space-y-1" id="field-price">
@@ -623,6 +702,72 @@ export default function BookingsView({ bookings, guesthouseId, onRefresh }: Book
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Custom Room Inventory Management Modal */}
+      {showRoomsModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" id="rooms-modal">
+          <div className="bg-white rounded-2xl border border-gray-100 max-w-sm w-full p-6 shadow-2xl space-y-6" id="rooms-modal-body">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3" id="rooms-modal-header">
+              <h3 className="font-bold text-gray-900 text-base" id="rooms-modal-title">Guesthouse Room Inventory</h3>
+              <button onClick={() => setShowRoomsModal(false)} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Form to add a room */}
+              <form onSubmit={handleRoomAdd} className="flex gap-2" id="add-room-form">
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Suite 204 - Rose Garden"
+                  value={newRoomInput}
+                  onChange={(e) => setNewRoomInput(e.target.value)}
+                  disabled={updatingRooms}
+                  className="flex-1 px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={updatingRooms || !newRoomInput.trim()}
+                  className="px-4 py-2 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-400 text-white rounded-xl text-xs font-semibold shrink-0"
+                >
+                  Add Room
+                </button>
+              </form>
+
+              {/* List of existing rooms */}
+              <div className="space-y-2 max-h-60 overflow-y-auto" id="rooms-list-container">
+                <span className="text-[10px] font-bold text-gray-400 block uppercase">Active Room / Cabin Inventory</span>
+                {roomsList.length > 0 ? (
+                  roomsList.map((room) => (
+                    <div key={room} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100 text-xs font-medium text-gray-700">
+                      <span>{room}</span>
+                      <button
+                        onClick={() => handleRoomDelete(room)}
+                        disabled={updatingRooms}
+                        className="text-red-500 hover:text-red-700 disabled:text-red-300 font-semibold p-1"
+                        title="Delete Room"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-center text-xs text-gray-400 py-4">No rooms defined yet.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-gray-100" id="rooms-modal-footer">
+              <button
+                type="button"
+                onClick={() => setShowRoomsModal(false)}
+                className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-semibold"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
