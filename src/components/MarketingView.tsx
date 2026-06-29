@@ -210,7 +210,7 @@ export default function MarketingView({
             <div id="creator-headers">
               <h4 className="font-semibold text-gray-900">Configure Marketing Broadcast</h4>
               <p className="text-xs text-gray-400 mt-1">
-                Trigger bulk messages to <span className="font-bold text-gray-700">{optInCount} active customers</span> who consented under GDPR terms.
+                Trigger bulk messages to <span className="font-bold text-gray-700">{optInCount} active customers</span> who consented under Botswana Data Protection Act (DPA) terms.
               </p>
             </div>
 
@@ -286,7 +286,7 @@ export default function MarketingView({
                   <input
                     type="tel"
                     required
-                    placeholder="e.g. +14155552671"
+                    placeholder="e.g. +267 71234567"
                     value={quickPhone}
                     onChange={(e) => setQuickPhone(e.target.value)}
                     className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"

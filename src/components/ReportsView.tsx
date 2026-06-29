@@ -166,7 +166,7 @@ export default function ReportsView({ guesthouseId }: ReportsProps) {
 
           <div className="p-3.5 bg-teal-50 border border-teal-100 rounded-xl flex items-center gap-2 text-[10px] text-teal-800" id="whatsapp-report-notice">
             <TrendingUp className="h-4 w-4 text-teal-600 shrink-0" />
-            <span>GDPR compliance is maintained automatically. Subscribing customers can trigger opt-out instantly.</span>
+            <span>Compliance with the Botswana Data Protection Act (DPA) is maintained automatically. Subscribing customers can trigger opt-out instantly.</span>
           </div>
         </div>
       </div>

@@ -307,7 +307,7 @@ export default function BookingsView({ bookings, guesthouseId, onRefresh }: Book
                     <td className="p-4 font-medium text-gray-700">{b.roomName}</td>
                     <td className="p-4 text-gray-500">{new Date(b.checkIn).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
                     <td className="p-4 text-gray-500">{new Date(b.checkOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                    <td className="p-4 font-semibold text-gray-900">${Number(b.totalAmount).toFixed(2)}</td>
+                    <td className="p-4 font-semibold text-gray-900">P{Number(b.totalAmount).toFixed(2)}</td>
                     <td className="p-4">
                       <select
                         value={b.status}
@@ -394,7 +394,7 @@ export default function BookingsView({ bookings, guesthouseId, onRefresh }: Book
                   <input
                     type="tel"
                     required
-                    placeholder="e.g. +13105550192"
+                    placeholder="e.g. +267 71234567"
                     value={formData.customerPhone}
                     onChange={(e) => setFormData({ ...formData, customerPhone: e.target.value })}
                     className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
@@ -428,7 +428,7 @@ export default function BookingsView({ bookings, guesthouseId, onRefresh }: Book
                   </select>
                 </div>
                 <div className="space-y-1" id="field-price">
-                  <label className="text-xs font-bold text-gray-500">TOTAL COST ($) *</label>
+                  <label className="text-xs font-bold text-gray-500">TOTAL COST (BWP) *</label>
                   <input
                     type="number"
                     required
@@ -572,7 +572,7 @@ export default function BookingsView({ bookings, guesthouseId, onRefresh }: Book
                           <td className="p-2 text-gray-600">{row.roomName}</td>
                           <td className="p-2 text-gray-500">{row.checkIn}</td>
                           <td className="p-2 text-gray-500">{row.checkOut}</td>
-                          <td className="p-2 text-right font-semibold text-gray-900">${row.totalAmount}</td>
+                          <td className="p-2 text-right font-semibold text-gray-900">P{row.totalAmount}</td>
                         </tr>
                       ))}
                       {parsedRows.length > 5 && (

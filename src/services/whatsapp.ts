@@ -204,7 +204,7 @@ export async function executeMarketingCampaign(
   if (!guesthouse) return { totalOptIn: 0, sent: 0 };
 
   const customers = await memoryDb.customer.findMany(guesthouseId);
-  // GDPR filter: strictly optInPromo === true
+  // Botswana DPA filter: strictly optInPromo === true
   const consentedCustomers = customers.filter((c) => c.optInPromo);
 
   const waConfig: WhatsAppConfig | undefined = guesthouse.whatsappPhoneId && guesthouse.whatsappToken ? {

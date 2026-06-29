@@ -110,7 +110,7 @@ export default function CustomersView({ customers, guesthouseId, onRefresh }: Cu
                 <th className="p-4">Customer Details</th>
                 <th className="p-4">Phone Number</th>
                 <th className="p-4">Email</th>
-                <th className="p-4">GDPR Opt-In Status</th>
+                <th className="p-4">Botswana DPA Opt-In Status</th>
                 <th className="p-4 text-center">Marketing Actions Allowed</th>
               </tr>
             </thead>
@@ -197,7 +197,7 @@ export default function CustomersView({ customers, guesthouseId, onRefresh }: Cu
                 <input
                   type="tel"
                   required
-                  placeholder="e.g. +13105550192"
+                  placeholder="e.g. +267 71234567"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
@@ -226,7 +226,7 @@ export default function CustomersView({ customers, guesthouseId, onRefresh }: Cu
                   className="h-4 w-4 accent-gray-900 rounded"
                 />
                 <label htmlFor="optInCheck" className="text-xs text-gray-600 font-medium select-none cursor-pointer">
-                  WhatsApp Promotional Marketing Opt-In (GDPR Consented)
+                  WhatsApp Promotional Marketing Opt-In (Botswana DPA Consented)
                 </label>
               </div>
 

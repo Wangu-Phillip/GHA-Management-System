@@ -104,7 +104,7 @@ export default function AiAnalyticsView({ guesthouseId, onNavigateToCampaign }: 
               }`}
               id="toggle-revenue"
             >
-              Projected Revenue ($)
+              Projected Revenue (BWP)
             </button>
           </div>
         </div>
@@ -123,7 +123,7 @@ export default function AiAnalyticsView({ guesthouseId, onNavigateToCampaign }: 
               <YAxis stroke="#9CA3AF" fontSize={11} tickLine={false} />
               <Tooltip
                 formatter={(value) => [
-                  chartMetric === 'occupancy' ? `${value}%` : `$${value}`,
+                  chartMetric === 'occupancy' ? `${value}%` : `P${value}`,
                   chartMetric === 'occupancy' ? 'Occupancy Forecast' : 'Predicted Daily Revenue'
                 ]}
               />
