@@ -54,6 +54,7 @@ export interface BookingData {
   customerName: string;
   customerEmail?: string;
   customerPhone: string;
+  customerCountry?: string;
   roomName: string;
   checkIn: Date;
   checkOut: Date;
@@ -71,6 +72,7 @@ export interface CustomerData {
   name: string;
   email?: string;
   phone: string;
+  customerCountry?: string;
   optInPromo: boolean;
   gender?: 'MALE' | 'FEMALE' | 'OTHER';
   ageGroup?: '18-25' | '26-35' | '36-50' | '50+';
@@ -551,6 +553,7 @@ export const memoryDb = {
         customerName: data.customerName,
         customerEmail: data.customerEmail,
         customerPhone: data.customerPhone,
+        customerCountry: data.customerCountry,
         roomName: data.roomName,
         checkIn: new Date(data.checkIn),
         checkOut: new Date(data.checkOut),
@@ -575,9 +578,16 @@ export const memoryDb = {
           name: data.customerName,
           email: data.customerEmail,
           phone: phoneClean,
+          customerCountry: data.customerCountry,
           optInPromo: false, // Default is opt-out until they opt-in
           createdAt: new Date(),
         });
+      } else {
+        existingCustomer.name = data.customerName;
+        existingCustomer.email = data.customerEmail || existingCustomer.email;
+        if (data.customerCountry) {
+          existingCustomer.customerCountry = data.customerCountry;
+        }
       }
 
       return newBooking;
@@ -621,6 +631,7 @@ export const memoryDb = {
         existing.name = data.name;
         existing.email = data.email || existing.email;
         existing.optInPromo = data.optInPromo !== undefined ? data.optInPromo : existing.optInPromo;
+        if (data.customerCountry) existing.customerCountry = data.customerCountry;
         if (data.gender) existing.gender = data.gender;
         if (data.ageGroup) existing.ageGroup = data.ageGroup;
         if (data.groupStyle) existing.groupStyle = data.groupStyle;
@@ -632,6 +643,7 @@ export const memoryDb = {
         name: data.name,
         email: data.email,
         phone: phoneClean,
+        customerCountry: data.customerCountry,
         optInPromo: !!data.optInPromo,
         gender: data.gender,
         ageGroup: data.ageGroup,

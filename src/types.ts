@@ -29,6 +29,7 @@ export interface Booking {
   customerName: string;
   customerEmail?: string;
   customerPhone: string;
+  customerCountry?: string;
   roomName: string;
   checkIn: string;
   checkOut: string;
@@ -46,6 +47,7 @@ export interface Customer {
   name: string;
   email?: string;
   phone: string;
+  customerCountry?: string;
   optInPromo: boolean;
   gender?: 'MALE' | 'FEMALE' | 'OTHER';
   ageGroup?: '18-25' | '26-35' | '36-50' | '50+';

@@ -81,6 +81,7 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
     customerName: '',
     customerEmail: '',
     customerPhone: '',
+    customerCountry: 'Botswana (local)',
     roomName: roomsList[0],
     checkIn: '',
     checkOut: '',
@@ -130,6 +131,7 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
           customerName: '',
           customerEmail: '',
           customerPhone: '',
+          customerCountry: 'Botswana (local)',
           roomName: 'Suite 101 - Oak Haven',
           checkIn: '',
           checkOut: '',
@@ -344,6 +346,7 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
                 customerName: '',
                 customerEmail: '',
                 customerPhone: '',
+                customerCountry: 'Botswana (local)',
                 roomName: roomsList[0] || '',
                 checkIn: '',
                 checkOut: '',
@@ -382,7 +385,14 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
                 filteredBookings.map((b) => (
                   <tr key={b.id} className="hover:bg-gray-50/50 transition-colors" id={`booking-row-${b.id}`}>
                     <td className="p-4">
-                      <div className="font-semibold text-gray-800">{b.customerName}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-gray-800">{b.customerName}</span>
+                        {b.customerCountry && (
+                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100">
+                            {b.customerCountry}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-gray-400 font-mono text-[10px] mt-0.5">{b.customerPhone}</div>
                     </td>
                     <td className="p-4 font-medium text-gray-700">{b.roomName}</td>
@@ -467,6 +477,24 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
                   onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
                   className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
                 />
+              </div>
+
+              <div className="space-y-1" id="field-country">
+                <label className="text-xs font-bold text-gray-500">COUNTRY OF ORIGIN *</label>
+                <select
+                  value={formData.customerCountry}
+                  onChange={(e) => setFormData({ ...formData, customerCountry: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none bg-white text-gray-700"
+                >
+                  <option value="Botswana (local)">Botswana (local)</option>
+                  <option value="South Africa">South Africa</option>
+                  <option value="Zimbabwe">Zimbabwe</option>
+                  <option value="Zambia">Zambia</option>
+                  <option value="United Kingdom">United Kingdom</option>
+                  <option value="United States of America">United States of America</option>
+                  <option value="Germany">Germany</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3" id="form-grid-contact">

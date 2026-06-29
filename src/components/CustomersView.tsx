@@ -18,6 +18,7 @@ export default function CustomersView({ customers, guesthouseId, onRefresh }: Cu
     name: '',
     email: '',
     phone: '',
+    customerCountry: 'Botswana (local)',
     optInPromo: true,
     gender: '' as any,
     ageGroup: '' as any,
@@ -28,6 +29,7 @@ export default function CustomersView({ customers, guesthouseId, onRefresh }: Cu
     name: '',
     email: '',
     phone: '',
+    customerCountry: 'Botswana (local)',
     optInPromo: true,
     gender: '' as any,
     ageGroup: '' as any,
@@ -61,7 +63,7 @@ export default function CustomersView({ customers, guesthouseId, onRefresh }: Cu
 
       if (response.ok) {
         setShowAddModal(false);
-        setFormData({ name: '', email: '', phone: '', optInPromo: true, gender: '', ageGroup: '', groupStyle: '' });
+        setFormData({ name: '', email: '', phone: '', customerCountry: 'Botswana (local)', optInPromo: true, gender: '', ageGroup: '', groupStyle: '' });
         await onRefresh();
       } else {
         const err = await response.json();
@@ -78,6 +80,7 @@ export default function CustomersView({ customers, guesthouseId, onRefresh }: Cu
       name: customer.name,
       email: customer.email || '',
       phone: customer.phone,
+      customerCountry: customer.customerCountry || 'Botswana (local)',
       optInPromo: customer.optInPromo,
       gender: customer.gender || '',
       ageGroup: customer.ageGroup || '',
@@ -200,7 +203,14 @@ export default function CustomersView({ customers, guesthouseId, onRefresh }: Cu
                         <User className="h-4 w-4" />
                       </div>
                       <div>
-                        <span className="font-semibold text-gray-800 block text-sm">{c.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-gray-800 text-sm">{c.name}</span>
+                          {c.customerCountry && (
+                            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100">
+                              {c.customerCountry}
+                            </span>
+                          )}
+                        </div>
                         <div className="flex flex-wrap gap-1 mt-1">
                           <span className="text-[10px] text-gray-400 font-mono mr-1">ID: {c.id.substring(0, 13)}</span>
                           {c.gender && (
@@ -319,6 +329,24 @@ export default function CustomersView({ customers, guesthouseId, onRefresh }: Cu
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
                 />
+              </div>
+
+              <div className="space-y-1" id="field-cust-country">
+                <label className="text-xs font-bold text-gray-500 block">COUNTRY OF ORIGIN</label>
+                <select
+                  value={formData.customerCountry}
+                  onChange={(e) => setFormData({ ...formData, customerCountry: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none bg-white text-gray-700"
+                >
+                  <option value="Botswana (local)">Botswana (local)</option>
+                  <option value="South Africa">South Africa</option>
+                  <option value="Zimbabwe">Zimbabwe</option>
+                  <option value="Zambia">Zambia</option>
+                  <option value="United Kingdom">United Kingdom</option>
+                  <option value="United States of America">United States of America</option>
+                  <option value="Germany">Germany</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3" id="field-cust-demographics">
@@ -448,6 +476,24 @@ export default function CustomersView({ customers, guesthouseId, onRefresh }: Cu
                   onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
                   className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
                 />
+              </div>
+
+              <div className="space-y-1" id="edit-field-cust-country">
+                <label className="text-xs font-bold text-gray-500 block">COUNTRY OF ORIGIN</label>
+                <select
+                  value={editFormData.customerCountry}
+                  onChange={(e) => setEditFormData({ ...editFormData, customerCountry: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none bg-white text-gray-700"
+                >
+                  <option value="Botswana (local)">Botswana (local)</option>
+                  <option value="South Africa">South Africa</option>
+                  <option value="Zimbabwe">Zimbabwe</option>
+                  <option value="Zambia">Zambia</option>
+                  <option value="United Kingdom">United Kingdom</option>
+                  <option value="United States of America">United States of America</option>
+                  <option value="Germany">Germany</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3" id="edit-field-cust-demographics">

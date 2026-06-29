@@ -251,7 +251,7 @@ app.get('/api/bookings', async (c) => {
 
 app.post('/api/bookings', async (c) => {
   try {
-    const { guesthouseId, customerName, customerPhone, roomName, checkIn, checkOut, totalAmount, status } = await c.req.json();
+    const { guesthouseId, customerName, customerPhone, customerCountry, roomName, checkIn, checkOut, totalAmount, status } = await c.req.json();
     if (!guesthouseId || !customerName || !customerPhone || !roomName || !checkIn || !checkOut || totalAmount === undefined) {
       return c.json({ error: 'All booking fields are required' }, 400);
     }
@@ -260,6 +260,7 @@ app.post('/api/bookings', async (c) => {
       guesthouseId,
       customerName,
       customerPhone,
+      customerCountry: customerCountry || 'Botswana (local)',
       roomName,
       checkIn: new Date(checkIn),
       checkOut: new Date(checkOut),
@@ -341,7 +342,7 @@ app.get('/api/customers', async (c) => {
 
 app.post('/api/customers', async (c) => {
   try {
-    const { guesthouseId, name, email, phone, optInPromo, gender, ageGroup, groupStyle } = await c.req.json();
+    const { guesthouseId, name, email, phone, customerCountry, optInPromo, gender, ageGroup, groupStyle } = await c.req.json();
     if (!guesthouseId || !name || !phone) {
       return c.json({ error: 'guesthouseId, name, and phone are required' }, 400);
     }
@@ -351,6 +352,7 @@ app.post('/api/customers', async (c) => {
       name,
       email,
       phone,
+      customerCountry: customerCountry || 'Botswana (local)',
       optInPromo: !!optInPromo,
       gender,
       ageGroup,
