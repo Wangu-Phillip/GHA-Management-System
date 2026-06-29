@@ -1,38 +1,18 @@
 import { PrismaClient } from '@prisma/client';
+import { PrismaD1 } from '@prisma/adapter-d1';
 
-let prismaInstance: PrismaClient | null = null;
 let isDbConnected = false;
 
-// Initialize Prisma client lazily and check connection
+export function getD1PrismaClient(db: any): PrismaClient {
+  const adapter = new PrismaD1(db);
+  const prisma = new PrismaClient({ adapter });
+  isDbConnected = true;
+  return prisma;
+}
+
+// Keep legacy for compatibility during compilation check
 export async function getPrismaClient(): Promise<PrismaClient | null> {
-  if (prismaInstance) return prismaInstance;
-
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    console.log('DATABASE_URL not found. Running in Local Demo Mode.');
-    return null;
-  }
-
-  try {
-    const client = new PrismaClient({
-      datasources: {
-        db: {
-          url: url,
-        },
-      },
-    });
-    // Simple query to verify connection
-    await client.$connect();
-    console.log('Successfully connected to PostgreSQL database using Prisma!');
-    prismaInstance = client;
-    isDbConnected = true;
-    return prismaInstance;
-  } catch (error) {
-    console.error('Failed to connect to PostgreSQL. Falling back to Local Demo Mode.', error);
-    prismaInstance = null;
-    isDbConnected = false;
-    return null;
-  }
+  return null;
 }
 
 export function checkDbConnection(): boolean {
