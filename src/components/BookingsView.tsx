@@ -13,6 +13,7 @@ interface BookingsViewProps {
 export default function BookingsView({ bookings, guesthouseId, guesthouse, onRefresh, onUpdateGuesthouse }: BookingsViewProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [dateFilter, setDateFilter] = useState('ALL');
   
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -102,7 +103,30 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
                           b.customerPhone.includes(search) || 
                           b.roomName.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'ALL' || b.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    
+    let matchesDate = true;
+    if (dateFilter !== 'ALL' && b.createdAt) {
+      const created = new Date(b.createdAt);
+      const now = new Date();
+      const diffTime = now.getTime() - created.getTime();
+      const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
+      if (dateFilter === 'TODAY') {
+        matchesDate = created.getFullYear() === now.getFullYear() &&
+                      created.getMonth() === now.getMonth() &&
+                      created.getDate() === now.getDate();
+      } else if (dateFilter === 'WEEK') {
+        matchesDate = diffDays >= 0 && diffDays <= 7;
+      } else if (dateFilter === 'MONTH') {
+        matchesDate = diffDays >= 0 && diffDays <= 30;
+      } else if (dateFilter === '90DAYS') {
+        matchesDate = diffDays >= 0 && diffDays <= 90;
+      } else if (dateFilter === 'YEAR') {
+        matchesDate = diffDays >= 0 && diffDays <= 365;
+      }
+    }
+
+    return matchesSearch && matchesStatus && matchesDate;
   });
 
   // Handle Manual Add Submit
@@ -320,6 +344,21 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
             <option value="CHECKED_IN">Checked In</option>
             <option value="CHECKED_OUT">Checked Out</option>
             <option value="CANCELLED">Cancelled</option>
+          </select>
+
+          {/* Date Range filter selection */}
+          <select
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="px-3.5 py-2.5 bg-white border border-gray-100 rounded-xl text-xs font-semibold text-gray-700 shadow-sm focus:outline-none bg-white"
+            id="bookings-date-filter-select"
+          >
+            <option value="ALL">All Time</option>
+            <option value="TODAY">Current Day</option>
+            <option value="WEEK">Current Week (7d)</option>
+            <option value="MONTH">Current Month (30d)</option>
+            <option value="90DAYS">Last 90 Days</option>
+            <option value="YEAR">Current Year (365d)</option>
           </select>
 
           <button

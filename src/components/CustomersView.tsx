@@ -10,6 +10,7 @@ interface CustomersProps {
 
 export default function CustomersView({ customers, guesthouseId, onRefresh }: CustomersProps) {
   const [search, setSearch] = useState('');
+  const [dateFilter, setDateFilter] = useState('ALL');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -37,11 +38,35 @@ export default function CustomersView({ customers, guesthouseId, onRefresh }: Cu
   });
 
   // Filter customers list
-  const filteredCustomers = customers.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone.includes(search) ||
-    (c.email && c.email.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filteredCustomers = customers.filter(c => {
+    const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase()) ||
+                          c.phone.includes(search) ||
+                          (c.email && c.email.toLowerCase().includes(search.toLowerCase()));
+
+    let matchesDate = true;
+    if (dateFilter !== 'ALL' && c.createdAt) {
+      const created = new Date(c.createdAt);
+      const now = new Date();
+      const diffTime = now.getTime() - created.getTime();
+      const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
+      if (dateFilter === 'TODAY') {
+        matchesDate = created.getFullYear() === now.getFullYear() &&
+                      created.getMonth() === now.getMonth() &&
+                      created.getDate() === now.getDate();
+      } else if (dateFilter === 'WEEK') {
+        matchesDate = diffDays >= 0 && diffDays <= 7;
+      } else if (dateFilter === 'MONTH') {
+        matchesDate = diffDays >= 0 && diffDays <= 30;
+      } else if (dateFilter === '90DAYS') {
+        matchesDate = diffDays >= 0 && diffDays <= 90;
+      } else if (dateFilter === 'YEAR') {
+        matchesDate = diffDays >= 0 && diffDays <= 365;
+      }
+    }
+
+    return matchesSearch && matchesDate;
+  });
 
   // Submit manual Customer onboarding
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -170,14 +195,31 @@ export default function CustomersView({ customers, guesthouseId, onRefresh }: Cu
           />
         </div>
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
-          id="onboard-customer-btn"
-        >
-          <UserPlus className="h-4 w-4" />
-          Add Customer Record
-        </button>
+        <div className="flex flex-wrap items-center gap-3" id="customers-actions">
+          {/* Date range filter selection */}
+          <select
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="px-3.5 py-2.5 bg-white border border-gray-100 rounded-xl text-xs font-semibold text-gray-700 shadow-sm focus:outline-none bg-white"
+            id="customer-date-filter-select"
+          >
+            <option value="ALL">All Registrations</option>
+            <option value="TODAY">Current Day</option>
+            <option value="WEEK">Current Week (7d)</option>
+            <option value="MONTH">Current Month (30d)</option>
+            <option value="90DAYS">Last 90 Days</option>
+            <option value="YEAR">Current Year (365d)</option>
+          </select>
+
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors whitespace-nowrap"
+            id="onboard-customer-btn"
+          >
+            <UserPlus className="h-4 w-4" />
+            Add Customer Record
+          </button>
+        </div>
       </div>
 
       {/* Customer profiles grid list */}
