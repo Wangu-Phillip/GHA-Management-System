@@ -67,6 +67,7 @@ export interface MessageLog {
   id: string;
   guesthouseId: string;
   bookingId?: string;
+  campaignId?: string;
   phone: string;
   direction: 'OUTBOUND' | 'INBOUND';
   messageType: 'PROMO' | 'REVIEW_REQUEST' | 'GENERAL';

@@ -17,9 +17,10 @@ export async function sendWhatsAppMessage(params: {
   content: string;
   messageType: 'PROMO' | 'REVIEW_REQUEST' | 'GENERAL';
   bookingId?: string;
+  campaignId?: string;
   config?: WhatsAppConfig;
 }): Promise<{ success: boolean; messageId: string; status: string; contentSent: string }> {
-  const { guesthouseId, phone, content, messageType, bookingId, config } = params;
+  const { guesthouseId, phone, content, messageType, bookingId, campaignId, config } = params;
   const messageId = `wa-msg-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
   // Normalize phone number (remove space, dash, plus)
@@ -74,6 +75,7 @@ export async function sendWhatsAppMessage(params: {
         await memoryDb.messageLog.create({
           guesthouseId,
           bookingId,
+          campaignId,
           phone: phone,
           direction: 'OUTBOUND',
           messageType,
@@ -91,6 +93,7 @@ export async function sendWhatsAppMessage(params: {
       await memoryDb.messageLog.create({
         guesthouseId,
         bookingId,
+        campaignId,
         phone,
         direction: 'OUTBOUND',
         messageType,
@@ -105,13 +108,26 @@ export async function sendWhatsAppMessage(params: {
   console.log(`[WhatsApp Sandbox Demo] Message Sent to +${normalizedPhone} (${messageType}):`);
   console.log(`>> "${content}"`);
 
-  // Simulate delivery callback timeline
-  const finalStatus = 'DELIVERED';
+  // Simulate realistic delivery status for campaigns
+  let finalStatus: 'PENDING' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED' = 'DELIVERED';
+  if (messageType === 'PROMO') {
+    const statusRand = Math.random();
+    if (statusRand < 0.55) {
+      finalStatus = 'READ';
+    } else if (statusRand < 0.8) {
+      finalStatus = 'DELIVERED';
+    } else if (statusRand < 0.95) {
+      finalStatus = 'SENT';
+    } else {
+      finalStatus = 'FAILED';
+    }
+  }
 
   // Save outbound record to database logs
   await memoryDb.messageLog.create({
     guesthouseId,
     bookingId,
+    campaignId,
     phone,
     direction: 'OUTBOUND',
     messageType,
@@ -119,8 +135,62 @@ export async function sendWhatsAppMessage(params: {
     status: finalStatus,
   });
 
+  // If status is READ and it's a campaign promo, simulate replies and bookings
+  if (finalStatus === 'READ' && messageType === 'PROMO' && campaignId) {
+    const replyChance = Math.random();
+    if (replyChance < 0.6) {
+      const replies = [
+        "Sounds like an amazing offer! Count me in. Just booked!",
+        "Thanks for this discount. What rooms are available next weekend?",
+        "Perfect! Pula! We loved our stay and would love to visit again.",
+        "Is the coupon code SUMMER15 also valid for premium suites?"
+      ];
+      const replyContent = replies[Math.floor(Math.random() * replies.length)];
+      
+      // Save Inbound Reply Log
+      await memoryDb.messageLog.create({
+        guesthouseId,
+        campaignId,
+        phone,
+        direction: 'INBOUND',
+        messageType: 'GENERAL',
+        content: replyContent,
+        status: 'READ',
+      });
+
+      // Find customer info
+      const customers = await memoryDb.customer.findMany(guesthouseId);
+      const customer = customers.find(c => c.phone === phone);
+      const customerName = customer ? customer.name : 'Valued Guest';
+
+      // 50% chance they book and show up!
+      if (Math.random() < 0.5) {
+        const rooms = ["Executive Suite", "Deluxe Room", "Garden Cottage", "Standard Room"];
+        const selectedRoom = rooms[Math.floor(Math.random() * rooms.length)];
+        
+        const checkIn = new Date();
+        checkIn.setDate(checkIn.getDate() + Math.floor(Math.random() * 7) + 1);
+        const checkOut = new Date(checkIn);
+        checkOut.setDate(checkOut.getDate() + Math.floor(Math.random() * 3) + 1);
+
+        // Create booking in system
+        await memoryDb.booking.create({
+          guesthouseId,
+          customerName,
+          customerEmail: customer?.email || 'guest@example.com',
+          customerPhone: phone,
+          roomName: selectedRoom,
+          checkIn,
+          checkOut,
+          status: Math.random() > 0.4 ? 'CHECKED_IN' : 'CONFIRMED',
+          totalAmount: Math.floor(Math.random() * 800) + 350,
+        });
+      }
+    }
+  }
+
   return {
-    success: true,
+    success: finalStatus !== 'FAILED',
     messageId,
     status: finalStatus,
     contentSent: content,
@@ -233,6 +303,7 @@ export async function executeMarketingCampaign(
       phone: c.phone,
       content: personalizedText,
       messageType: 'PROMO',
+      campaignId: campaign.id,
       config: waConfig,
     });
 

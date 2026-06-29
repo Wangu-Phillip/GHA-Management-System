@@ -92,6 +92,7 @@ export interface MessageLogData {
   id: string;
   guesthouseId: string;
   bookingId?: string;
+  campaignId?: string;
   phone: string;
   direction: 'OUTBOUND' | 'INBOUND';
   messageType: 'PROMO' | 'REVIEW_REQUEST' | 'GENERAL';
@@ -403,11 +404,23 @@ const mockMessageLogs: MessageLogData[] = [
   {
     id: 'msg-2',
     guesthouseId: 'tenant-1',
+    campaignId: 'camp-1',
     phone: '+267 72123456',
     direction: 'OUTBOUND',
     messageType: 'PROMO',
-    content: 'Hi Robert! Claim your 15% discount for your next summer escape at Pinecrest Ridge using code: SUNNY15.',
-    status: 'DELIVERED',
+    content: 'Hi Robert Carter! We are offering a special early bird 15% discount for your next summer escape at Pinecrest Ridge! Use coupon SUMMER15.',
+    status: 'READ',
+    createdAt: getPastDate(10),
+  },
+  {
+    id: 'msg-2-reply',
+    guesthouseId: 'tenant-1',
+    campaignId: 'camp-1',
+    phone: '+267 72123456',
+    direction: 'INBOUND',
+    messageType: 'GENERAL',
+    content: 'Sounds wonderful, thank you! I just confirmed a weekend stay.',
+    status: 'READ',
     createdAt: getPastDate(10),
   },
   {
@@ -420,6 +433,28 @@ const mockMessageLogs: MessageLogData[] = [
     content: 'Hi Robert Carter! Thank you for staying at Pinecrest Ridge. We would love to hear your feedback. Please leave us a review here: https://g.page/pinecrest/review',
     status: 'SENT',
     createdAt: getPastDate(5),
+  },
+  {
+    id: 'msg-4',
+    guesthouseId: 'tenant-1',
+    campaignId: 'camp-1',
+    phone: '+267 71234567',
+    direction: 'OUTBOUND',
+    messageType: 'PROMO',
+    content: 'Hi Alice Green! We are offering a special early bird 15% discount for your next summer escape at Pinecrest Ridge! Use coupon SUMMER15.',
+    status: 'DELIVERED',
+    createdAt: getPastDate(10),
+  },
+  {
+    id: 'msg-5',
+    guesthouseId: 'tenant-1',
+    campaignId: 'camp-1',
+    phone: '+267 77123456',
+    direction: 'OUTBOUND',
+    messageType: 'PROMO',
+    content: 'Hi Keira Knightley! We are offering a special early bird 15% discount for your next summer escape at Pinecrest Ridge! Use coupon SUMMER15.',
+    status: 'FAILED',
+    createdAt: getPastDate(10),
   },
 ];
 
@@ -668,9 +703,10 @@ export const memoryDb = {
     },
     create: async (data: Omit<MessageLogData, 'id' | 'createdAt'>) => {
       const newLog: MessageLogData = {
-        id: `msg-${Date.now()}`,
+        id: `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         guesthouseId: data.guesthouseId,
         bookingId: data.bookingId,
+        campaignId: data.campaignId,
         phone: data.phone,
         direction: data.direction,
         messageType: data.messageType,

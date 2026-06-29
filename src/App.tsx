@@ -19,7 +19,7 @@ import {
   Settings
 } from 'lucide-react';
 
-import { User, Guesthouse, Booking, Customer, MessageLog } from './types';
+import { User, Guesthouse, Booking, Customer, MessageLog, Campaign } from './types';
 import OverviewView from './components/OverviewView';
 import BookingsView from './components/BookingsView';
 import MarketingView from './components/MarketingView';
@@ -38,6 +38,7 @@ export default function App() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [logs, setLogs] = useState<MessageLog[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [dbConnected, setDbConnected] = useState(false);
   const [dbMode, setDbMode] = useState('LOCAL_DEMO_STATE');
   const [loading, setLoading] = useState(false);
@@ -56,11 +57,13 @@ export default function App() {
       const bRes = await fetch(`/api/bookings?guesthouseId=${targetGuesthouseId}`);
       const cRes = await fetch(`/api/customers?guesthouseId=${targetGuesthouseId}`);
       const lRes = await fetch(`/api/marketing/whatsapp-logs?guesthouseId=${targetGuesthouseId}`);
+      const campRes = await fetch(`/api/marketing/campaigns?guesthouseId=${targetGuesthouseId}`);
       
-      if (bRes.ok && cRes.ok && lRes.ok) {
+      if (bRes.ok && cRes.ok && lRes.ok && campRes.ok) {
         setBookings(await bRes.json());
         setCustomers(await cRes.json());
         setLogs(await lRes.json());
+        setCampaigns(await campRes.json());
       }
     } catch (err) {
       console.error('Network synchronization error', err);
@@ -524,12 +527,13 @@ export default function App() {
 
               {activeTab === 'marketing' && guesthouse && (
                 <MarketingView
-                  campaigns={bookings.length > 0 ? [] : []} // Campaigns are fetched inside child or handled by db
+                  campaigns={campaigns}
                   logs={logs}
                   guesthouse={guesthouse}
                   guesthouseId={guesthouse.id}
                   optInCount={customers.filter((c) => c.optInPromo).length}
                   customers={customers}
+                  bookings={bookings}
                   onRefresh={handleDataRefresh}
                   onUpdateGuesthouse={(updatedGh) => setGuesthouse(updatedGh)}
                 />
