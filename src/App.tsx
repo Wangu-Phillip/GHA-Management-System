@@ -305,9 +305,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex font-sans text-gray-800 antialiased" id="dashboard-container">
+    <div className="h-screen bg-gray-50 flex font-sans text-gray-800 antialiased overflow-hidden" id="dashboard-container">
       {/* 1. Permanent Left Sidebar */}
-      <aside className="w-64 bg-gray-950 text-white flex flex-col justify-between shrink-0" id="main-sidebar">
+      <aside className="w-64 bg-gray-950 text-white flex flex-col justify-between shrink-0 overflow-hidden" id="main-sidebar">
         <div className="p-6 space-y-6" id="sidebar-top">
           {/* Logo Brand */}
           <div className="flex items-center gap-3" id="sidebar-brand">
