@@ -15,7 +15,8 @@ import {
   Lock,
   ChevronRight,
   Database,
-  Building
+  Building,
+  Settings
 } from 'lucide-react';
 
 import { User, Guesthouse, Booking, Customer, MessageLog } from './types';
@@ -26,6 +27,7 @@ import CustomersView from './components/CustomersView';
 import ReportsView from './components/ReportsView';
 import AiAnalyticsView from './components/AiAnalyticsView';
 import SuperAdminView from './components/SuperAdminView';
+import SettingsView from './components/SettingsView';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -391,6 +393,19 @@ export default function App() {
                   <Brain className="h-4 w-4 text-amber-400" />
                   AI Booking Forecast
                 </button>
+
+                {user.role === 'TENANT_ADMIN' && (
+                  <button
+                    onClick={() => setActiveTab('settings')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
+                      activeTab === 'settings' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+                    }`}
+                    id="nav-settings"
+                  >
+                    <Settings className="h-4 w-4" />
+                    Guesthouse Settings
+                  </button>
+                )}
               </>
             )}
 
@@ -536,6 +551,15 @@ export default function App() {
                 <AiAnalyticsView
                   guesthouseId={guesthouse.id}
                   onNavigateToCampaign={handleNavigateToCampaign}
+                />
+              )}
+
+              {activeTab === 'settings' && guesthouse && (
+                <SettingsView
+                  guesthouse={guesthouse}
+                  currentUser={user}
+                  onUpdateGuesthouse={(updatedGh) => setGuesthouse(updatedGh)}
+                  onLogout={handleLogout}
                 />
               )}
 

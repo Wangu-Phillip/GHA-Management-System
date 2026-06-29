@@ -475,6 +475,119 @@ app.put('/api/marketing/whatsapp-settings', async (c) => {
   }
 });
 
+// ------------------------------------------
+// EMPLOYEE & GUESTHOUSE SETTINGS ENDPOINTS
+// ------------------------------------------
+
+// 1. Get employees for a guesthouse
+app.get('/api/employees', async (c) => {
+  try {
+    const guesthouseId = c.req.query('guesthouseId');
+    if (!guesthouseId) return c.json({ error: 'guesthouseId query parameter is required' }, 400);
+
+    const users = await memoryDb.user.findMany(guesthouseId);
+    // Exclude super admins if they somehow show up, only show tenant level users
+    const employees = users.filter(u => u.role !== 'SUPER_ADMIN');
+    return c.json(employees);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// 2. Add an employee user
+app.post('/api/employees', async (c) => {
+  try {
+    const { name, email, role, password, guesthouseId } = await c.req.json();
+    if (!name || !email || !role || !guesthouseId) {
+      return c.json({ error: 'name, email, role, and guesthouseId are required' }, 400);
+    }
+
+    // Check if user already exists
+    const existing = await memoryDb.user.findUnique(email);
+    if (existing) {
+      return c.json({ error: 'A user with this email already exists' }, 400);
+    }
+
+    const newUser = await memoryDb.user.create({
+      name,
+      email,
+      role: role as any,
+      passwordHash: password || 'sales123', // fallback simple password
+      guesthouseId,
+    });
+
+    return c.json(newUser, 201);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// 3. Update an employee
+app.put('/api/employees/:id', async (c) => {
+  const id = c.req.param('id');
+  try {
+    const body = await c.req.json();
+    const updated = await memoryDb.user.update(id, body);
+    return c.json(updated);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// 4. Delete an employee
+app.delete('/api/employees/:id', async (c) => {
+  const id = c.req.param('id');
+  try {
+    const deleted = await memoryDb.user.delete(id);
+    return c.json({ message: 'Employee deleted successfully', deleted });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// 5. Update guesthouse details (name, logoUrl, etc.)
+app.put('/api/guesthouse/:id', async (c) => {
+  const id = c.req.param('id');
+  try {
+    const body = await c.req.json();
+    const updated = await memoryDb.guesthouse.update(id, body);
+    return c.json({ message: 'Guesthouse details updated successfully', guesthouse: updated });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// 6. Delete account/guesthouse (along with all nested entries)
+app.delete('/api/guesthouse/:id', async (c) => {
+  const id = c.req.param('id');
+  try {
+    // 1. Delete associated bookings
+    const bookings = await memoryDb.booking.findMany(id);
+    for (const b of bookings) {
+      await memoryDb.booking.delete(b.id);
+    }
+
+    // 2. Delete associated customers
+    const customers = await memoryDb.customer.findMany(id);
+    for (const cust of customers) {
+      await memoryDb.customer.delete(cust.id);
+    }
+
+    // 3. Delete associated users/employees
+    const users = await memoryDb.user.findMany(id);
+    for (const u of users) {
+      await memoryDb.user.delete(u.id);
+    }
+
+    // 4. Delete the guesthouse itself
+    const deleted = await memoryDb.guesthouse.delete(id);
+
+    return c.json({ message: 'Guesthouse and all associated data deleted successfully', deleted });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 app.post('/api/marketing/whatsapp-automations/trigger-review', async (c) => {
   try {
     const { guesthouseId } = await c.req.json();

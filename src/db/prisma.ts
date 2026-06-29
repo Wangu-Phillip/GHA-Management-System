@@ -33,6 +33,7 @@ export interface GuesthouseData {
   subscriptionEndsAt?: Date;
   rooms?: string[];
   reviewTriggerTime?: string;
+  logoUrl?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -111,6 +112,7 @@ const mockGuesthouses: GuesthouseData[] = [
     subscriptionEndsAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days from now
     rooms: ['Suite 101 - Oak Haven', 'Room 202 - Pine view', 'Room 203 - Cozy Studio'],
     reviewTriggerTime: '11:00 AM',
+    logoUrl: 'https://images.unsplash.com/photo-1582719508461-905c673771fd?w=200&h=200&fit=crop&q=80',
     createdAt: new Date('2026-01-10T12:00:00Z'),
     updatedAt: new Date('2026-01-10T12:00:00Z'),
   },
@@ -124,6 +126,7 @@ const mockGuesthouses: GuesthouseData[] = [
     subscriptionEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
     rooms: ['Beachfront Cabin A', 'Horizon Suite', 'Standard Queen Room 5'],
     reviewTriggerTime: '12:00 PM',
+    logoUrl: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=200&h=200&fit=crop&q=80',
     createdAt: new Date('2026-02-15T12:00:00Z'),
     updatedAt: new Date('2026-02-15T12:00:00Z'),
   },
@@ -134,6 +137,7 @@ const mockGuesthouses: GuesthouseData[] = [
     subscriptionEndsAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
     rooms: ['Deluxe Cabin 3', 'Valley View King 10', 'Sunset Studio'],
     reviewTriggerTime: '10:00 AM',
+    logoUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200&h=200&fit=crop&q=80',
     createdAt: new Date('2026-03-01T12:00:00Z'),
     updatedAt: new Date('2026-03-01T12:00:00Z'),
   },

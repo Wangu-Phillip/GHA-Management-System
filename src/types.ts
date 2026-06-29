@@ -10,6 +10,7 @@ export interface Guesthouse {
   subscriptionEndsAt?: string;
   rooms?: string[];
   reviewTriggerTime?: string;
+  logoUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
