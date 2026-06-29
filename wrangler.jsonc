@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gha-management",
+  "main": "src/worker.ts",
+  "compatibility_date": "2025-05-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "gha-management-db",
+      "database_id": "REPLACE_WITH_D1_ID_FROM_WRANGLER_CREATE",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  "observability": {
+    "enabled": true
+  }
+
+  // Secrets (set via `wrangler secret put`):
+  //   GEMINI_API_KEY
+}

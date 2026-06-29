@@ -22,7 +22,7 @@ export async function generateFuturePredictions(
   guesthouseName: string,
   apiKey?: string
 ): Promise<AiInsights> {
-  const key = apiKey || process.env.GEMINI_API_KEY;
+  const key = apiKey;
 
   if (!key || key === 'MY_GEMINI_API_KEY') {
     console.log('Gemini API Key not set. Serving synthetic AI-driven forecast.');
@@ -51,7 +51,7 @@ You must reply with ONLY the JSON object conforming to the requested schema.
 `;
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${key}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
     const payload = {
       contents: [
         {

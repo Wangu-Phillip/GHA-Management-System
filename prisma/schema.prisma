@@ -1,50 +1,46 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// Prisma schema for Cloudflare D1 (SQLite) via @prisma/adapter-d1.
 
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
-}
-
-enum Role {
-  SUPER_ADMIN
-  TENANT_ADMIN
-  TENANT_SALES
+  url      = env("DATABASE_URL")
 }
 
 model Guesthouse {
-  id                 String       @id @default(uuid())
-  name               String
-  whatsappPhoneId    String?      // Meta WhatsApp Business Phone Number ID
-  whatsappToken      String?      // Meta WhatsApp System User Access Token
-  whatsappBusinessId String?      // Meta WhatsApp Business Account ID
-  subscriptionStatus String       @default("ACTIVE") // ACTIVE, TRIAL, PAST_DUE, CANCELLED
-  subscriptionEndsAt DateTime?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  id                  String       @id @default(uuid())
+  name                String
+  whatsappPhoneId     String?
+  whatsappToken       String?
+  whatsappBusinessId  String?
+  subscriptionStatus  String       @default("ACTIVE")
+  subscriptionEndsAt  DateTime?
+  rooms               String?
+  reviewTriggerTime   String?
+  logoUrl             String?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
-  users              User[]
-  bookings           Booking[]
-  customers          Customer[]
-  campaigns          Campaign[]
-  messageLogs        MessageLog[]
+  users               User[]
+  bookings            Booking[]
+  customers           Customer[]
+  campaigns           Campaign[]
+  messageLogs         MessageLog[]
 }
 
 model User {
-  id           String     @id @default(uuid())
-  email        String     @unique
-  password     String     // Hashed password
+  id           String      @id @default(uuid())
+  email        String      @unique
+  passwordHash String
   name         String
-  role         Role       @default(TENANT_SALES)
-  guesthouseId String?    // Nullable for SUPER_ADMIN
+  role         String      @default("TENANT_SALES")
+  guesthouseId String?
   guesthouse   Guesthouse? @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 }
 
 model Booking {
@@ -53,14 +49,15 @@ model Booking {
   guesthouse          Guesthouse   @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
   customerName        String
   customerEmail       String?
-  customerPhone       String       // Phone number (international format e.g. +1234567890)
+  customerPhone       String
+  customerCountry     String?
   roomName            String
   checkIn             DateTime
   checkOut            DateTime
-  status              String       // CONFIRMED, CHECKED_IN, CHECKED_OUT, CANCELLED
+  status              String       @default("CONFIRMED")
   totalAmount         Float
   reviewCollected     Boolean      @default(false)
-  reviewMessageStatus String       @default("PENDING") // PENDING, SENT, FAILED, NO_OPT_IN
+  reviewMessageStatus String       @default("PENDING")
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
@@ -68,29 +65,35 @@ model Booking {
 }
 
 model Customer {
-  id           String     @id @default(uuid())
-  guesthouseId String
-  guesthouse   Guesthouse @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
-  name         String
-  email        String?
-  phone        String
-  optInPromo   Boolean    @default(false) // Marketing consent
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id              String     @id @default(uuid())
+  guesthouseId    String
+  guesthouse      Guesthouse @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
+  name            String
+  email           String?
+  phone           String
+  customerCountry String?
+  optInPromo      Boolean    @default(false)
+  gender          String?
+  ageGroup        String?
+  groupStyle      String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
   @@unique([guesthouseId, phone])
 }
 
 model Campaign {
-  id              String     @id @default(uuid())
+  id              String       @id @default(uuid())
   guesthouseId    String
-  guesthouse      Guesthouse @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
+  guesthouse      Guesthouse   @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
   name            String
-  messageTemplate String     // Approved WhatsApp Meta Template Name or Custom Text
-  status          String     // DRAFT, SCHEDULED, SENT
+  messageTemplate String
+  status          String       @default("DRAFT")
   scheduledAt     DateTime?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  messageLogs     MessageLog[]
 }
 
 model MessageLog {
@@ -99,10 +102,12 @@ model MessageLog {
   guesthouse   Guesthouse @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
   bookingId    String?
   booking      Booking?   @relation(fields: [bookingId], references: [id], onDelete: SetNull)
-  phone        String     // Recipient phone number
-  direction    String     // OUTBOUND, INBOUND
-  messageType  String     // PROMO, REVIEW_REQUEST, GENERAL
+  campaignId   String?
+  campaign     Campaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  phone        String
+  direction    String
+  messageType  String
   content      String
-  status       String     // PENDING, SENT, DELIVERED, READ, FAILED
+  status       String     @default("PENDING")
   createdAt    DateTime   @default(now())
 }
