@@ -1,24 +1,4 @@
-import { GoogleGenAI, Type } from '@google/genai';
 import { BookingData } from '../db/prisma';
-
-let aiInstance: GoogleGenAI | null = null;
-
-function getAiClient(): GoogleGenAI | null {
-  if (aiInstance) return aiInstance;
-  const key = process.env.GEMINI_API_KEY;
-  if (!key || key === 'MY_GEMINI_API_KEY') {
-    return null;
-  }
-  aiInstance = new GoogleGenAI({
-    apiKey: key,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      },
-    },
-  });
-  return aiInstance;
-}
 
 export interface PredictionDay {
   date: string; // YYYY-MM-DD
@@ -39,11 +19,12 @@ export interface AiInsights {
  */
 export async function generateFuturePredictions(
   bookings: BookingData[],
-  guesthouseName: string
+  guesthouseName: string,
+  apiKey?: string
 ): Promise<AiInsights> {
-  const ai = getAiClient();
+  const key = apiKey || process.env.GEMINI_API_KEY;
 
-  if (!ai) {
+  if (!key || key === 'MY_GEMINI_API_KEY') {
     console.log('Gemini API Key not set. Serving synthetic AI-driven forecast.');
     return generateSyntheticForecast(bookings, guesthouseName);
   }
@@ -70,47 +51,71 @@ You must reply with ONLY the JSON object conforming to the requested schema.
 `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${key}`;
+    const payload = {
+      contents: [
+        {
+          parts: [
+            {
+              text: prompt
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
         responseSchema: {
-          type: Type.OBJECT,
+          type: "OBJECT",
           properties: {
             predictions: {
-              type: Type.ARRAY,
+              type: "ARRAY",
               items: {
-                type: Type.OBJECT,
+                type: "OBJECT",
                 properties: {
-                  date: { type: Type.STRING, description: "YYYY-MM-DD" },
-                  predictedOccupancyRate: { type: Type.NUMBER, description: "Percentage from 0 to 100" },
-                  predictedRevenue: { type: Type.NUMBER, description: "Projected daily revenue in currency" },
-                  confidenceScore: { type: Type.NUMBER, description: "Confidence level 0.0 to 1.0" },
-                  seasonalFactors: { type: Type.STRING, description: "Reasoning (e.g., Weekend peak, Holiday season, Weekday lull)" }
+                  date: { type: "STRING", description: "YYYY-MM-DD" },
+                  predictedOccupancyRate: { type: "NUMBER", description: "Percentage from 0 to 100" },
+                  predictedRevenue: { type: "NUMBER", description: "Projected daily revenue in currency" },
+                  confidenceScore: { type: "NUMBER", description: "Confidence level 0.0 to 1.0" },
+                  seasonalFactors: { type: "STRING", description: "Reasoning" }
                 },
                 required: ["date", "predictedOccupancyRate", "predictedRevenue", "confidenceScore", "seasonalFactors"]
               }
             },
-            summaryText: { type: Type.STRING, description: "Executive narrative of upcoming trends and pricing suggestions" },
+            summaryText: { type: "STRING", description: "Executive narrative of upcoming trends and pricing suggestions" },
             recommendedPromotions: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
+              type: "ARRAY",
+              items: { type: "STRING" },
               description: "Actionable targeted promotional ideas for low-demand periods"
             }
           },
           required: ["predictions", "summaryText", "recommendedPromotions"]
         }
       }
+    };
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'aistudio-build'
+      },
+      body: JSON.stringify(payload)
     });
 
-    const text = response.text;
-    if (!text) {
-      throw new Error('Empty response from Gemini');
+    if (!res.ok) {
+      throw new Error(`Gemini API responded with status ${res.status}: ${await res.text()}`);
     }
-    return JSON.parse(text) as AiInsights;
+
+    const data: any = await res.json();
+    const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!textResponse) {
+      throw new Error('Empty response from Gemini API');
+    }
+
+    return JSON.parse(textResponse) as AiInsights;
   } catch (error) {
-    console.error('Error generating AI predictions via Gemini:', error);
+    console.error('Error generating AI predictions via Gemini edge API:', error);
     return generateSyntheticForecast(bookings, guesthouseName);
   }
 }

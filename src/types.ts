@@ -8,6 +8,9 @@ export interface Guesthouse {
   whatsappBusinessId?: string;
   subscriptionStatus: string;
   subscriptionEndsAt?: string;
+  rooms?: string[];
+  reviewTriggerTime?: string;
+  logoUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -26,6 +29,7 @@ export interface Booking {
   customerName: string;
   customerEmail?: string;
   customerPhone: string;
+  customerCountry?: string;
   roomName: string;
   checkIn: string;
   checkOut: string;
@@ -43,7 +47,11 @@ export interface Customer {
   name: string;
   email?: string;
   phone: string;
+  customerCountry?: string;
   optInPromo: boolean;
+  gender?: 'MALE' | 'FEMALE' | 'OTHER';
+  ageGroup?: '18-25' | '26-35' | '36-50' | '50+';
+  groupStyle?: 'COUPLE' | 'SINGLE' | 'FAMILY';
   createdAt: string;
 }
 
@@ -61,6 +69,7 @@ export interface MessageLog {
   id: string;
   guesthouseId: string;
   bookingId?: string;
+  campaignId?: string;
   phone: string;
   direction: 'OUTBOUND' | 'INBOUND';
   messageType: 'PROMO' | 'REVIEW_REQUEST' | 'GENERAL';
@@ -117,4 +126,10 @@ export interface CompiledReport {
     status: string;
     whatsappAutomated: string;
   }>;
+  demographics?: {
+    byCountry: Array<{ name: string; bookingsCount: number; revenueCollected: number }>;
+    byGender: Array<{ name: string; bookingsCount: number; revenueCollected: number }>;
+    byAgeGroup: Array<{ name: string; bookingsCount: number; revenueCollected: number }>;
+    byGroupStyle: Array<{ name: string; bookingsCount: number; revenueCollected: number }>;
+  };
 }

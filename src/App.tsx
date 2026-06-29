@@ -15,10 +15,11 @@ import {
   Lock,
   ChevronRight,
   Database,
-  Building
+  Building,
+  Settings
 } from 'lucide-react';
 
-import { User, Guesthouse, Booking, Customer, MessageLog } from './types';
+import { User, Guesthouse, Booking, Customer, MessageLog, Campaign } from './types';
 import OverviewView from './components/OverviewView';
 import BookingsView from './components/BookingsView';
 import MarketingView from './components/MarketingView';
@@ -26,6 +27,7 @@ import CustomersView from './components/CustomersView';
 import ReportsView from './components/ReportsView';
 import AiAnalyticsView from './components/AiAnalyticsView';
 import SuperAdminView from './components/SuperAdminView';
+import SettingsView from './components/SettingsView';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -36,6 +38,7 @@ export default function App() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [logs, setLogs] = useState<MessageLog[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [dbConnected, setDbConnected] = useState(false);
   const [dbMode, setDbMode] = useState('LOCAL_DEMO_STATE');
   const [loading, setLoading] = useState(false);
@@ -54,11 +57,13 @@ export default function App() {
       const bRes = await fetch(`/api/bookings?guesthouseId=${targetGuesthouseId}`);
       const cRes = await fetch(`/api/customers?guesthouseId=${targetGuesthouseId}`);
       const lRes = await fetch(`/api/marketing/whatsapp-logs?guesthouseId=${targetGuesthouseId}`);
+      const campRes = await fetch(`/api/marketing/campaigns?guesthouseId=${targetGuesthouseId}`);
       
-      if (bRes.ok && cRes.ok && lRes.ok) {
+      if (bRes.ok && cRes.ok && lRes.ok && campRes.ok) {
         setBookings(await bRes.json());
         setCustomers(await cRes.json());
         setLogs(await lRes.json());
+        setCampaigns(await campRes.json());
       }
     } catch (err) {
       console.error('Network synchronization error', err);
@@ -305,9 +310,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex font-sans text-gray-800 antialiased" id="dashboard-container">
+    <div className="h-screen bg-gray-50 flex font-sans text-gray-800 antialiased overflow-hidden" id="dashboard-container">
       {/* 1. Permanent Left Sidebar */}
-      <aside className="w-64 bg-gray-950 text-white flex flex-col justify-between shrink-0" id="main-sidebar">
+      <aside className="w-64 bg-gray-950 text-white flex flex-col justify-between shrink-0 overflow-hidden" id="main-sidebar">
         <div className="p-6 space-y-6" id="sidebar-top">
           {/* Logo Brand */}
           <div className="flex items-center gap-3" id="sidebar-brand">
@@ -391,6 +396,19 @@ export default function App() {
                   <Brain className="h-4 w-4 text-amber-400" />
                   AI Booking Forecast
                 </button>
+
+                {user.role === 'TENANT_ADMIN' && (
+                  <button
+                    onClick={() => setActiveTab('settings')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
+                      activeTab === 'settings' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+                    }`}
+                    id="nav-settings"
+                  >
+                    <Settings className="h-4 w-4" />
+                    Guesthouse Settings
+                  </button>
+                )}
               </>
             )}
 
@@ -501,17 +519,21 @@ export default function App() {
                 <BookingsView
                   bookings={bookings}
                   guesthouseId={guesthouse.id}
+                  guesthouse={guesthouse}
                   onRefresh={handleDataRefresh}
+                  onUpdateGuesthouse={(updatedGh) => setGuesthouse(updatedGh)}
                 />
               )}
 
               {activeTab === 'marketing' && guesthouse && (
                 <MarketingView
-                  campaigns={bookings.length > 0 ? [] : []} // Campaigns are fetched inside child or handled by db
+                  campaigns={campaigns}
                   logs={logs}
                   guesthouse={guesthouse}
                   guesthouseId={guesthouse.id}
                   optInCount={customers.filter((c) => c.optInPromo).length}
+                  customers={customers}
+                  bookings={bookings}
                   onRefresh={handleDataRefresh}
                   onUpdateGuesthouse={(updatedGh) => setGuesthouse(updatedGh)}
                 />
@@ -533,6 +555,15 @@ export default function App() {
                 <AiAnalyticsView
                   guesthouseId={guesthouse.id}
                   onNavigateToCampaign={handleNavigateToCampaign}
+                />
+              )}
+
+              {activeTab === 'settings' && guesthouse && (
+                <SettingsView
+                  guesthouse={guesthouse}
+                  currentUser={user}
+                  onUpdateGuesthouse={(updatedGh) => setGuesthouse(updatedGh)}
+                  onLogout={handleLogout}
                 />
               )}
 

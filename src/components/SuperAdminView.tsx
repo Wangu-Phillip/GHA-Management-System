@@ -121,7 +121,7 @@ export default function SuperAdminView({ onRefreshGlobalStats, onSwitchTenant }:
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4" id="super-kpis">
           <div className="bg-indigo-950 text-white p-5 rounded-2xl border border-indigo-900 shadow-sm" id="super-kpi-global-revenue">
             <span className="text-[10px] text-indigo-300 font-bold block uppercase tracking-wider">Global SaaS Revenue Pool</span>
-            <span className="text-2xl font-black mt-1 block">${stats.totalGlobalRevenue.toLocaleString()}</span>
+            <span className="text-2xl font-black mt-1 block">P{stats.totalGlobalRevenue.toLocaleString()}</span>
             <span className="text-[10px] text-indigo-400 block mt-1">Aggregated platform transactional value</span>
           </div>
 

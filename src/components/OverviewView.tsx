@@ -1,6 +1,6 @@
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
-import { DollarSign, Bed, Calendar, Users, MessageSquare, AlertCircle, Sparkles } from 'lucide-react';
+import { Coins, Bed, Calendar, Users, MessageSquare, AlertCircle, Sparkles } from 'lucide-react';
 import { Booking, Customer, MessageLog } from '../types';
 
 interface OverviewProps {
@@ -66,11 +66,11 @@ export default function OverviewView({ bookings, customers, logs, dbConnected, o
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between" id="kpi-revenue">
           <div id="kpi-rev-details">
             <p className="text-sm font-medium text-gray-500" id="kpi-rev-title">Total Revenue</p>
-            <h3 className="text-2xl font-bold text-gray-900 mt-1" id="kpi-rev-value">${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+            <h3 className="text-2xl font-bold text-gray-900 mt-1" id="kpi-rev-value">P{totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
             <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full font-medium inline-block mt-2" id="kpi-rev-change">+12.5% this month</span>
           </div>
           <div className="p-3 bg-green-50 rounded-xl text-green-600" id="kpi-rev-icon-bg">
-            <DollarSign className="h-6 w-6" id="kpi-rev-icon" />
+            <Coins className="h-6 w-6" id="kpi-rev-icon" />
           </div>
         </div>
 
@@ -130,7 +130,7 @@ export default function OverviewView({ bookings, customers, logs, dbConnected, o
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
                   <XAxis dataKey="date" stroke="#9CA3AF" fontSize={11} tickLine={false} />
                   <YAxis stroke="#9CA3AF" fontSize={11} tickLine={false} />
-                  <Tooltip formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Revenue']} />
+                  <Tooltip formatter={(value) => [`P${Number(value).toFixed(2)}`, 'Revenue']} />
                   <Area type="monotone" dataKey="revenue" stroke="#10B981" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" />
                 </AreaChart>
               </ResponsiveContainer>

@@ -1,38 +1,18 @@
 import { PrismaClient } from '@prisma/client';
+import { PrismaD1 } from '@prisma/adapter-d1';
 
-let prismaInstance: PrismaClient | null = null;
 let isDbConnected = false;
 
-// Initialize Prisma client lazily and check connection
+export function getD1PrismaClient(db: any): PrismaClient {
+  const adapter = new PrismaD1(db);
+  const prisma = new PrismaClient({ adapter });
+  isDbConnected = true;
+  return prisma;
+}
+
+// Keep legacy for compatibility during compilation check
 export async function getPrismaClient(): Promise<PrismaClient | null> {
-  if (prismaInstance) return prismaInstance;
-
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    console.log('DATABASE_URL not found. Running in Local Demo Mode.');
-    return null;
-  }
-
-  try {
-    const client = new PrismaClient({
-      datasources: {
-        db: {
-          url: url,
-        },
-      },
-    });
-    // Simple query to verify connection
-    await client.$connect();
-    console.log('Successfully connected to PostgreSQL database using Prisma!');
-    prismaInstance = client;
-    isDbConnected = true;
-    return prismaInstance;
-  } catch (error) {
-    console.error('Failed to connect to PostgreSQL. Falling back to Local Demo Mode.', error);
-    prismaInstance = null;
-    isDbConnected = false;
-    return null;
-  }
+  return null;
 }
 
 export function checkDbConnection(): boolean {
@@ -51,6 +31,9 @@ export interface GuesthouseData {
   whatsappBusinessId?: string;
   subscriptionStatus: string;
   subscriptionEndsAt?: Date;
+  rooms?: string[];
+  reviewTriggerTime?: string;
+  logoUrl?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -71,6 +54,7 @@ export interface BookingData {
   customerName: string;
   customerEmail?: string;
   customerPhone: string;
+  customerCountry?: string;
   roomName: string;
   checkIn: Date;
   checkOut: Date;
@@ -88,7 +72,11 @@ export interface CustomerData {
   name: string;
   email?: string;
   phone: string;
+  customerCountry?: string;
   optInPromo: boolean;
+  gender?: 'MALE' | 'FEMALE' | 'OTHER';
+  ageGroup?: '18-25' | '26-35' | '36-50' | '50+';
+  groupStyle?: 'COUPLE' | 'SINGLE' | 'FAMILY';
   createdAt: Date;
 }
 
@@ -106,6 +94,7 @@ export interface MessageLogData {
   id: string;
   guesthouseId: string;
   bookingId?: string;
+  campaignId?: string;
   phone: string;
   direction: 'OUTBOUND' | 'INBOUND';
   messageType: 'PROMO' | 'REVIEW_REQUEST' | 'GENERAL';
@@ -124,6 +113,9 @@ const mockGuesthouses: GuesthouseData[] = [
     whatsappBusinessId: '984501920392019',
     subscriptionStatus: 'ACTIVE',
     subscriptionEndsAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days from now
+    rooms: ['Suite 101 - Oak Haven', 'Room 202 - Pine view', 'Room 203 - Cozy Studio'],
+    reviewTriggerTime: '11:00 AM',
+    logoUrl: 'https://images.unsplash.com/photo-1582719508461-905c673771fd?w=200&h=200&fit=crop&q=80',
     createdAt: new Date('2026-01-10T12:00:00Z'),
     updatedAt: new Date('2026-01-10T12:00:00Z'),
   },
@@ -131,10 +123,13 @@ const mockGuesthouses: GuesthouseData[] = [
     id: 'tenant-2',
     name: 'Ocean Breeze Retreat',
     whatsappPhoneId: '204958102930495',
-    whatsappToken: 'EAAGb0ZD...',
+    whatsappToken: 'EAAGb0ZC...',
     whatsappBusinessId: '874950291039203',
     subscriptionStatus: 'ACTIVE',
     subscriptionEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+    rooms: ['Beachfront Cabin A', 'Horizon Suite', 'Standard Queen Room 5'],
+    reviewTriggerTime: '12:00 PM',
+    logoUrl: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=200&h=200&fit=crop&q=80',
     createdAt: new Date('2026-02-15T12:00:00Z'),
     updatedAt: new Date('2026-02-15T12:00:00Z'),
   },
@@ -143,6 +138,9 @@ const mockGuesthouses: GuesthouseData[] = [
     name: 'Golden Valley Inn',
     subscriptionStatus: 'PAST_DUE',
     subscriptionEndsAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
+    rooms: ['Deluxe Cabin 3', 'Valley View King 10', 'Sunset Studio'],
+    reviewTriggerTime: '10:00 AM',
+    logoUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200&h=200&fit=crop&q=80',
     createdAt: new Date('2026-03-01T12:00:00Z'),
     updatedAt: new Date('2026-03-01T12:00:00Z'),
   },
@@ -206,7 +204,7 @@ const mockBookings: BookingData[] = [
     guesthouseId: 'tenant-1',
     customerName: 'Alice Green',
     customerEmail: 'alice@example.com',
-    customerPhone: '+14155552671',
+    customerPhone: '+267 71234567',
     roomName: 'Suite 101 - Oak Haven',
     checkIn: getPastDate(15),
     checkOut: getPastDate(12),
@@ -222,7 +220,7 @@ const mockBookings: BookingData[] = [
     guesthouseId: 'tenant-1',
     customerName: 'Robert Carter',
     customerEmail: 'robert@example.com',
-    customerPhone: '+15105553920',
+    customerPhone: '+267 72123456',
     roomName: 'Room 202 - Pine view',
     checkIn: getPastDate(8),
     checkOut: getPastDate(5),
@@ -270,7 +268,7 @@ const mockBookings: BookingData[] = [
     guesthouseId: 'tenant-1',
     customerName: 'Eleanor Vance',
     customerEmail: 'eleanor@hillhouse.com',
-    customerPhone: '+16175550912',
+    customerPhone: '+267 73345678',
     roomName: 'Room 202 - Pine view',
     checkIn: getFutureDate(8),
     checkOut: getFutureDate(11),
@@ -288,7 +286,7 @@ const mockBookings: BookingData[] = [
     guesthouseId: 'tenant-2',
     customerName: 'Liam Neeson',
     customerEmail: 'liam@taken.com',
-    customerPhone: '+13105550192',
+    customerPhone: '+267 74567890',
     roomName: 'Beachfront Cabin A',
     checkIn: getPastDate(20),
     checkOut: getPastDate(15),
@@ -323,7 +321,7 @@ const mockCustomers: CustomerData[] = [
     guesthouseId: 'tenant-1',
     name: 'Alice Green',
     email: 'alice@example.com',
-    phone: '+14155552671',
+    phone: '+267 71234567',
     optInPromo: true,
     createdAt: getPastDate(20),
   },
@@ -332,7 +330,7 @@ const mockCustomers: CustomerData[] = [
     guesthouseId: 'tenant-1',
     name: 'Robert Carter',
     email: 'robert@example.com',
-    phone: '+15105553920',
+    phone: '+267 72123456',
     optInPromo: true,
     createdAt: getPastDate(10),
   },
@@ -341,7 +339,7 @@ const mockCustomers: CustomerData[] = [
     guesthouseId: 'tenant-1',
     name: 'Clara Oswald',
     email: 'clara@tardis.org',
-    phone: '+447911123456',
+    phone: '+267 75123456',
     optInPromo: false,
     createdAt: getPastDate(6),
   },
@@ -350,7 +348,7 @@ const mockCustomers: CustomerData[] = [
     guesthouseId: 'tenant-1',
     name: 'David Tennant',
     email: 'david@doctor.com',
-    phone: '+447911987654',
+    phone: '+267 76123456',
     optInPromo: true,
     createdAt: getPastDate(1),
   },
@@ -359,7 +357,7 @@ const mockCustomers: CustomerData[] = [
     guesthouseId: 'tenant-2',
     name: 'Liam Neeson',
     email: 'liam@taken.com',
-    phone: '+13105550192',
+    phone: '+267 74567890',
     optInPromo: false,
     createdAt: getPastDate(25),
   },
@@ -368,7 +366,7 @@ const mockCustomers: CustomerData[] = [
     guesthouseId: 'tenant-2',
     name: 'Keira Knightley',
     email: 'keira@pirates.com',
-    phone: '+447911223344',
+    phone: '+267 77123456',
     optInPromo: true,
     createdAt: getPastDate(5),
   },
@@ -398,7 +396,7 @@ const mockMessageLogs: MessageLogData[] = [
     id: 'msg-1',
     guesthouseId: 'tenant-1',
     bookingId: 'booking-1',
-    phone: '+14155552671',
+    phone: '+267 71234567',
     direction: 'OUTBOUND',
     messageType: 'REVIEW_REQUEST',
     content: 'Hi Alice Green! Thank you for staying at Pinecrest Ridge. We would love to hear your feedback. Please leave us a review here: https://g.page/pinecrest/review',
@@ -408,23 +406,57 @@ const mockMessageLogs: MessageLogData[] = [
   {
     id: 'msg-2',
     guesthouseId: 'tenant-1',
-    phone: '+15105553920',
+    campaignId: 'camp-1',
+    phone: '+267 72123456',
     direction: 'OUTBOUND',
     messageType: 'PROMO',
-    content: 'Hi Robert! Claim your 15% discount for your next summer escape at Pinecrest Ridge using code: SUNNY15.',
-    status: 'DELIVERED',
+    content: 'Hi Robert Carter! We are offering a special early bird 15% discount for your next summer escape at Pinecrest Ridge! Use coupon SUMMER15.',
+    status: 'READ',
+    createdAt: getPastDate(10),
+  },
+  {
+    id: 'msg-2-reply',
+    guesthouseId: 'tenant-1',
+    campaignId: 'camp-1',
+    phone: '+267 72123456',
+    direction: 'INBOUND',
+    messageType: 'GENERAL',
+    content: 'Sounds wonderful, thank you! I just confirmed a weekend stay.',
+    status: 'READ',
     createdAt: getPastDate(10),
   },
   {
     id: 'msg-3',
     guesthouseId: 'tenant-1',
     bookingId: 'booking-2',
-    phone: '+15105553920',
+    phone: '+267 72123456',
     direction: 'OUTBOUND',
     messageType: 'REVIEW_REQUEST',
     content: 'Hi Robert Carter! Thank you for staying at Pinecrest Ridge. We would love to hear your feedback. Please leave us a review here: https://g.page/pinecrest/review',
     status: 'SENT',
     createdAt: getPastDate(5),
+  },
+  {
+    id: 'msg-4',
+    guesthouseId: 'tenant-1',
+    campaignId: 'camp-1',
+    phone: '+267 71234567',
+    direction: 'OUTBOUND',
+    messageType: 'PROMO',
+    content: 'Hi Alice Green! We are offering a special early bird 15% discount for your next summer escape at Pinecrest Ridge! Use coupon SUMMER15.',
+    status: 'DELIVERED',
+    createdAt: getPastDate(10),
+  },
+  {
+    id: 'msg-5',
+    guesthouseId: 'tenant-1',
+    campaignId: 'camp-1',
+    phone: '+267 77123456',
+    direction: 'OUTBOUND',
+    messageType: 'PROMO',
+    content: 'Hi Keira Knightley! We are offering a special early bird 15% discount for your next summer escape at Pinecrest Ridge! Use coupon SUMMER15.',
+    status: 'FAILED',
+    createdAt: getPastDate(10),
   },
 ];
 
@@ -521,6 +553,7 @@ export const memoryDb = {
         customerName: data.customerName,
         customerEmail: data.customerEmail,
         customerPhone: data.customerPhone,
+        customerCountry: data.customerCountry,
         roomName: data.roomName,
         checkIn: new Date(data.checkIn),
         checkOut: new Date(data.checkOut),
@@ -545,9 +578,16 @@ export const memoryDb = {
           name: data.customerName,
           email: data.customerEmail,
           phone: phoneClean,
+          customerCountry: data.customerCountry,
           optInPromo: false, // Default is opt-out until they opt-in
           createdAt: new Date(),
         });
+      } else {
+        existingCustomer.name = data.customerName;
+        existingCustomer.email = data.customerEmail || existingCustomer.email;
+        if (data.customerCountry) {
+          existingCustomer.customerCountry = data.customerCountry;
+        }
       }
 
       return newBooking;
@@ -591,6 +631,10 @@ export const memoryDb = {
         existing.name = data.name;
         existing.email = data.email || existing.email;
         existing.optInPromo = data.optInPromo !== undefined ? data.optInPromo : existing.optInPromo;
+        if (data.customerCountry) existing.customerCountry = data.customerCountry;
+        if (data.gender) existing.gender = data.gender;
+        if (data.ageGroup) existing.ageGroup = data.ageGroup;
+        if (data.groupStyle) existing.groupStyle = data.groupStyle;
         return existing;
       }
       const newCust: CustomerData = {
@@ -599,7 +643,11 @@ export const memoryDb = {
         name: data.name,
         email: data.email,
         phone: phoneClean,
+        customerCountry: data.customerCountry,
         optInPromo: !!data.optInPromo,
+        gender: data.gender,
+        ageGroup: data.ageGroup,
+        groupStyle: data.groupStyle,
         createdAt: new Date(),
       };
       mockCustomers.push(newCust);
@@ -667,9 +715,10 @@ export const memoryDb = {
     },
     create: async (data: Omit<MessageLogData, 'id' | 'createdAt'>) => {
       const newLog: MessageLogData = {
-        id: `msg-${Date.now()}`,
+        id: `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         guesthouseId: data.guesthouseId,
         bookingId: data.bookingId,
+        campaignId: data.campaignId,
         phone: data.phone,
         direction: data.direction,
         messageType: data.messageType,
