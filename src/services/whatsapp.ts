@@ -268,14 +268,19 @@ export async function runCheckoutReviewAutomation(guesthouseId: string): Promise
 export async function executeMarketingCampaign(
   guesthouseId: string,
   campaignName: string,
-  templateContent: string
+  templateContent: string,
+  customerIds?: string[]
 ): Promise<{ totalOptIn: number; sent: number }> {
   const guesthouse = await memoryDb.guesthouse.findUnique(guesthouseId);
   if (!guesthouse) return { totalOptIn: 0, sent: 0 };
 
   const customers = await memoryDb.customer.findMany(guesthouseId);
   // Botswana DPA filter: strictly optInPromo === true
-  const consentedCustomers = customers.filter((c) => c.optInPromo);
+  let consentedCustomers = customers.filter((c) => c.optInPromo);
+
+  if (customerIds && customerIds.length > 0) {
+    consentedCustomers = consentedCustomers.filter((c) => customerIds.includes(c.id));
+  }
 
   const waConfig: WhatsAppConfig | undefined = guesthouse.whatsappPhoneId && guesthouse.whatsappToken ? {
     phoneId: guesthouse.whatsappPhoneId,

@@ -414,12 +414,12 @@ app.get('/api/marketing/whatsapp-logs', async (c) => {
 
 app.post('/api/marketing/campaigns', async (c) => {
   try {
-    const { guesthouseId, campaignName, messageTemplate } = await c.req.json();
+    const { guesthouseId, campaignName, messageTemplate, customerIds } = await c.req.json();
     if (!guesthouseId || !campaignName || !messageTemplate) {
       return c.json({ error: 'guesthouseId, campaignName, and messageTemplate are required' }, 400);
     }
 
-    const report = await executeMarketingCampaign(guesthouseId, campaignName, messageTemplate);
+    const report = await executeMarketingCampaign(guesthouseId, campaignName, messageTemplate, customerIds);
     return c.json({
       message: `Campaign dispatch completed. Transmitted ${report.sent} messages of ${report.totalOptIn} opted-in subscribers.`,
       report,

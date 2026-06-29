@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Campaign, MessageLog, Guesthouse, Customer, Booking } from '../types';
 import { Send, Settings, Sparkles, MessageSquare, ShieldAlert, History, Key, CheckCircle, RefreshCw, Smartphone, Users, Check, ChevronDown, ChevronUp, MessageCircle, AlertCircle, Eye, CornerDownRight } from 'lucide-react';
 
@@ -32,6 +32,28 @@ export default function MarketingView({
   const [campName, setCampName] = useState('');
   const [campTemplate, setCampTemplate] = useState('Hi {{name}}! We are offering a special discount for your next weekend escape at Pinecrest Ridge! Use coupon SUMMER15 for 15% off.');
   const [campaignStatus, setCampaignStatus] = useState<'idle' | 'sending' | 'success'>('idle');
+
+  // Customer selection state
+  const consentedCustomers = customers.filter(c => c.optInPromo);
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    setSelectedCustomerIds(customers.filter(c => c.optInPromo).map(c => c.id));
+  }, [customers]);
+
+  const toggleCustomerSelection = (id: string) => {
+    setSelectedCustomerIds(prev =>
+      prev.includes(id) ? prev.filter(cid => cid !== id) : [...prev, id]
+    );
+  };
+
+  const selectAllCustomers = () => {
+    setSelectedCustomerIds(consentedCustomers.map(c => c.id));
+  };
+
+  const deselectAllCustomers = () => {
+    setSelectedCustomerIds([]);
+  };
 
   // WhatsApp Meta form states
   const [phoneId, setPhoneId] = useState(guesthouse.whatsappPhoneId || '');
@@ -88,7 +110,8 @@ export default function MarketingView({
         body: JSON.stringify({
           guesthouseId,
           campaignName: campName,
-          messageTemplate: campTemplate
+          messageTemplate: campTemplate,
+          customerIds: selectedCustomerIds
         })
       });
 
@@ -245,6 +268,71 @@ export default function MarketingView({
                   <p className="text-[10px] text-gray-400 font-medium">Use <code className="font-mono bg-gray-100 px-1 py-0.5 rounded">{"{{name}}"}</code> to dynamically personalize the customer's name.</p>
                 </div>
 
+                {/* Selective Customer Checkbox List */}
+                {optInCount > 0 && (
+                  <div className="space-y-2 border-t border-gray-100 pt-4" id="field-camp-recipients-selection">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                      <label className="text-xs font-bold text-gray-500 flex items-center gap-1.5">
+                        <Users className="h-3.5 w-3.5 text-gray-400" />
+                        CHOOSE RECIPIENTS ({selectedCustomerIds.length} of {consentedCustomers.length} SELECTED)
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={selectAllCustomers}
+                          className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold uppercase tracking-wider"
+                          id="btn-select-all-promo"
+                        >
+                          Select All
+                        </button>
+                        <span className="text-gray-300 text-[10px]">|</span>
+                        <button
+                          type="button"
+                          onClick={deselectAllCustomers}
+                          className="text-[10px] text-gray-500 hover:text-gray-700 font-bold uppercase tracking-wider"
+                          id="btn-deselect-all-promo"
+                        >
+                          Deselect All
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="border border-gray-100 rounded-xl overflow-hidden max-h-48 overflow-y-auto divide-y divide-gray-100 bg-gray-50/50 p-2 space-y-1" id="recipients-picker-box">
+                      {consentedCustomers.map((c) => {
+                        const isSelected = selectedCustomerIds.includes(c.id);
+                        return (
+                          <div
+                            key={c.id}
+                            onClick={() => toggleCustomerSelection(c.id)}
+                            className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all ${
+                              isSelected ? 'bg-indigo-50/80 hover:bg-indigo-100/80 border-indigo-100' : 'bg-white hover:bg-gray-50 border border-gray-100'
+                            }`}
+                            id={`recipient-opt-${c.id}`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {}} // event handled by parent click
+                                className="rounded text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer"
+                              />
+                              <div className="text-left">
+                                <p className="text-xs font-bold text-gray-800">{c.name}</p>
+                                <p className="text-[10px] text-gray-400 font-mono">{c.phone}</p>
+                              </div>
+                            </div>
+                            {c.customerCountry && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-gray-100 text-gray-600">
+                                {c.customerCountry}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {optInCount === 0 ? (
                   <div className="p-4 bg-red-50 border border-red-200 text-red-800 text-xs rounded-xl flex items-center gap-2" id="no-consent-warning">
                     <ShieldAlert className="h-4 w-4 text-red-600 shrink-0" />
@@ -253,7 +341,7 @@ export default function MarketingView({
                 ) : (
                   <button
                     type="submit"
-                    disabled={campaignStatus === 'sending' || campaignStatus === 'success'}
+                    disabled={campaignStatus === 'sending' || campaignStatus === 'success' || selectedCustomerIds.length === 0}
                     className="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-400 text-white rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors shadow-sm"
                     id="campaign-submit-btn"
                   >
@@ -270,7 +358,7 @@ export default function MarketingView({
                     ) : (
                       <>
                         <Send className="h-4 w-4" />
-                        Bulk Blast Template to {optInCount} Guests
+                        Bulk Blast Template to {selectedCustomerIds.length} Guests
                       </>
                     )}
                   </button>
