@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CompiledReport } from '../types';
-import { Download, RefreshCw, BarChart3, TrendingUp, HelpCircle, FileSpreadsheet } from 'lucide-react';
+import { Download, RefreshCw, BarChart3, TrendingUp, HelpCircle, FileSpreadsheet, Users, Globe, Calendar, Briefcase } from 'lucide-react';
 
 interface ReportsProps {
   guesthouseId: string;
@@ -167,6 +167,148 @@ export default function ReportsView({ guesthouseId }: ReportsProps) {
           <div className="p-3.5 bg-teal-50 border border-teal-100 rounded-xl flex items-center gap-2 text-[10px] text-teal-800" id="whatsapp-report-notice">
             <TrendingUp className="h-4 w-4 text-teal-600 shrink-0" />
             <span>Compliance with the Botswana Data Protection Act (DPA) is maintained automatically. Subscribing customers can trigger opt-out instantly.</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Demographic Segment Insights */}
+      <div className="space-y-3" id="demographics-report-section">
+        <div id="demographics-header">
+          <h4 className="font-semibold text-gray-900 text-sm">Guest Demographic Segment Breakdown</h4>
+          <p className="text-xs text-gray-400 mt-0.5">Deeper customer segmentation profiling based on origin, age brackets, gender, and booking group styles</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" id="demographic-reports-grid">
+          {/* Country of Origin Card */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4" id="demographic-country">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                <Globe className="h-4 w-4" />
+              </div>
+              <div>
+                <h5 className="font-bold text-gray-900 text-xs tracking-wide uppercase">Countries of Origin</h5>
+                <p className="text-[10px] text-gray-400 font-medium">Bookings by guest country</p>
+              </div>
+            </div>
+            <div className="space-y-3 pt-1 text-xs">
+              {(!report.demographics?.byCountry || report.demographics.byCountry.length === 0) ? (
+                <p className="text-gray-400 text-[11px] text-center py-4">No segment data recorded</p>
+              ) : (
+                report.demographics.byCountry.map((row, idx) => {
+                  const pct = report.summary.totalRevenue > 0 ? (row.revenueCollected / report.summary.totalRevenue) * 100 : 0;
+                  return (
+                    <div key={idx} className="space-y-1.5">
+                      <div className="flex justify-between items-center text-[11px]">
+                        <span className="font-semibold text-gray-700">{row.name}</span>
+                        <span className="font-mono text-gray-500">{row.bookingsCount} bks • <span className="font-semibold text-gray-900">P{row.revenueCollected.toLocaleString()}</span></span>
+                      </div>
+                      <div className="w-full bg-gray-50 h-1.5 rounded-full overflow-hidden">
+                        <div className="bg-indigo-500 h-full rounded-full transition-all duration-500" style={{ width: `${Math.max(2, pct)}%` }} />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Gender Profile Card */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4" id="demographic-gender">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-pink-50 text-pink-600 rounded-xl">
+                <Users className="h-4 w-4" />
+              </div>
+              <div>
+                <h5 className="font-bold text-gray-900 text-xs tracking-wide uppercase">Gender Diversity</h5>
+                <p className="text-[10px] text-gray-400 font-medium">Revenue contribution metrics</p>
+              </div>
+            </div>
+            <div className="space-y-3 pt-1 text-xs">
+              {(!report.demographics?.byGender || report.demographics.byGender.length === 0) ? (
+                <p className="text-gray-400 text-[11px] text-center py-4">No segment data recorded</p>
+              ) : (
+                report.demographics.byGender.map((row, idx) => {
+                  const pct = report.summary.totalRevenue > 0 ? (row.revenueCollected / report.summary.totalRevenue) * 100 : 0;
+                  return (
+                    <div key={idx} className="space-y-1.5">
+                      <div className="flex justify-between items-center text-[11px]">
+                        <span className="font-semibold text-gray-700">{row.name}</span>
+                        <span className="font-mono text-gray-500">{row.bookingsCount} bks • <span className="font-semibold text-gray-900">P{row.revenueCollected.toLocaleString()}</span></span>
+                      </div>
+                      <div className="w-full bg-gray-50 h-1.5 rounded-full overflow-hidden">
+                        <div className="bg-pink-500 h-full rounded-full transition-all duration-500" style={{ width: `${Math.max(2, pct)}%` }} />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Age Brackets Card */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4" id="demographic-age">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                <Calendar className="h-4 w-4" />
+              </div>
+              <div>
+                <h5 className="font-bold text-gray-900 text-xs tracking-wide uppercase">Age Brackets</h5>
+                <p className="text-[10px] text-gray-400 font-medium">Age demographic distribution</p>
+              </div>
+            </div>
+            <div className="space-y-3 pt-1 text-xs">
+              {(!report.demographics?.byAgeGroup || report.demographics.byAgeGroup.length === 0) ? (
+                <p className="text-gray-400 text-[11px] text-center py-4">No segment data recorded</p>
+              ) : (
+                report.demographics.byAgeGroup.map((row, idx) => {
+                  const pct = report.summary.totalRevenue > 0 ? (row.revenueCollected / report.summary.totalRevenue) * 100 : 0;
+                  return (
+                    <div key={idx} className="space-y-1.5">
+                      <div className="flex justify-between items-center text-[11px]">
+                        <span className="font-semibold text-gray-700">{row.name}</span>
+                        <span className="font-mono text-gray-500">{row.bookingsCount} bks • <span className="font-semibold text-gray-900">P{row.revenueCollected.toLocaleString()}</span></span>
+                      </div>
+                      <div className="w-full bg-gray-50 h-1.5 rounded-full overflow-hidden">
+                        <div className="bg-blue-500 h-full rounded-full transition-all duration-500" style={{ width: `${Math.max(2, pct)}%` }} />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Group Style Composition Card */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4" id="demographic-style">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-teal-50 text-teal-600 rounded-xl">
+                <Briefcase className="h-4 w-4" />
+              </div>
+              <div>
+                <h5 className="font-bold text-gray-900 text-xs tracking-wide uppercase">Group Type Styles</h5>
+                <p className="text-[10px] text-gray-400 font-medium">Guest group compositions</p>
+              </div>
+            </div>
+            <div className="space-y-3 pt-1 text-xs">
+              {(!report.demographics?.byGroupStyle || report.demographics.byGroupStyle.length === 0) ? (
+                <p className="text-gray-400 text-[11px] text-center py-4">No segment data recorded</p>
+              ) : (
+                report.demographics.byGroupStyle.map((row, idx) => {
+                  const pct = report.summary.totalRevenue > 0 ? (row.revenueCollected / report.summary.totalRevenue) * 100 : 0;
+                  return (
+                    <div key={idx} className="space-y-1.5">
+                      <div className="flex justify-between items-center text-[11px]">
+                        <span className="font-semibold text-gray-700">{row.name}</span>
+                        <span className="font-mono text-gray-500">{row.bookingsCount} bks • <span className="font-semibold text-gray-900">P{row.revenueCollected.toLocaleString()}</span></span>
+                      </div>
+                      <div className="w-full bg-gray-50 h-1.5 rounded-full overflow-hidden">
+                        <div className="bg-teal-500 h-full rounded-full transition-all duration-500" style={{ width: `${Math.max(2, pct)}%` }} />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       </div>

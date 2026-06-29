@@ -126,4 +126,10 @@ export interface CompiledReport {
     status: string;
     whatsappAutomated: string;
   }>;
+  demographics?: {
+    byCountry: Array<{ name: string; bookingsCount: number; revenueCollected: number }>;
+    byGender: Array<{ name: string; bookingsCount: number; revenueCollected: number }>;
+    byAgeGroup: Array<{ name: string; bookingsCount: number; revenueCollected: number }>;
+    byGroupStyle: Array<{ name: string; bookingsCount: number; revenueCollected: number }>;
+  };
 }

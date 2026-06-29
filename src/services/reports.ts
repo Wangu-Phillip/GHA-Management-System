@@ -21,10 +21,22 @@ export interface ReportTableColumn {
   key: string;
 }
 
+export interface DemographicStats {
+  name: string;
+  bookingsCount: number;
+  revenueCollected: number;
+}
+
 export interface ReportData {
   summary: ReportSummary;
   revenueByRoomTable: any[];
   bookingDetailsTable: any[];
+  demographics: {
+    byCountry: DemographicStats[];
+    byGender: DemographicStats[];
+    byAgeGroup: DemographicStats[];
+    byGroupStyle: DemographicStats[];
+  };
 }
 
 /**
@@ -130,10 +142,88 @@ export function compileReportData(params: {
     whatsappAutomated: b.reviewMessageStatus,
   }));
 
+  // Compiling Demographic Segment Breakdowns
+  const customerMap = new Map<string, CustomerData>();
+  params.customers.forEach((c) => {
+    customerMap.set(c.phone.trim().replace(/\s+/g, ''), c);
+  });
+
+  const countryMap: Record<string, { bookings: number; revenue: number }> = {};
+  const genderMap: Record<string, { bookings: number; revenue: number }> = {};
+  const ageGroupMap: Record<string, { bookings: number; revenue: number }> = {};
+  const groupStyleMap: Record<string, { bookings: number; revenue: number }> = {};
+
+  filteredBookings.forEach((b) => {
+    const normPhone = b.customerPhone.trim().replace(/\s+/g, '');
+    const cust = customerMap.get(normPhone);
+
+    // Country of origin
+    const country = b.customerCountry || (cust ? cust.customerCountry : undefined) || 'Botswana (local)';
+    if (!countryMap[country]) countryMap[country] = { bookings: 0, revenue: 0 };
+    countryMap[country].bookings += 1;
+    countryMap[country].revenue += b.totalAmount;
+
+    // Gender profile
+    let gender = cust && cust.gender ? cust.gender : 'Unspecified';
+    if (gender === 'MALE') gender = 'Male';
+    else if (gender === 'FEMALE') gender = 'Female';
+    else if (gender === 'OTHER') gender = 'Other';
+
+    if (!genderMap[gender]) genderMap[gender] = { bookings: 0, revenue: 0 };
+    genderMap[gender].bookings += 1;
+    genderMap[gender].revenue += b.totalAmount;
+
+    // Age bracket
+    const ageGroup = cust && cust.ageGroup ? cust.ageGroup : 'Unspecified';
+    if (!ageGroupMap[ageGroup]) ageGroupMap[ageGroup] = { bookings: 0, revenue: 0 };
+    ageGroupMap[ageGroup].bookings += 1;
+    ageGroupMap[ageGroup].revenue += b.totalAmount;
+
+    // Group profile style
+    let groupStyle = cust && cust.groupStyle ? cust.groupStyle : 'Unspecified';
+    if (groupStyle === 'SINGLE') groupStyle = 'Solo Traveler';
+    else if (groupStyle === 'COUPLE') groupStyle = 'Couple';
+    else if (groupStyle === 'FAMILY') groupStyle = 'Family';
+
+    if (!groupStyleMap[groupStyle]) groupStyleMap[groupStyle] = { bookings: 0, revenue: 0 };
+    groupStyleMap[groupStyle].bookings += 1;
+    groupStyleMap[groupStyle].revenue += b.totalAmount;
+  });
+
+  const byCountry = Object.entries(countryMap).map(([name, val]) => ({
+    name,
+    bookingsCount: val.bookings,
+    revenueCollected: val.revenue,
+  })).sort((a, b) => b.revenueCollected - a.revenueCollected);
+
+  const byGender = Object.entries(genderMap).map(([name, val]) => ({
+    name,
+    bookingsCount: val.bookings,
+    revenueCollected: val.revenue,
+  })).sort((a, b) => b.revenueCollected - a.revenueCollected);
+
+  const byAgeGroup = Object.entries(ageGroupMap).map(([name, val]) => ({
+    name,
+    bookingsCount: val.bookings,
+    revenueCollected: val.revenue,
+  })).sort((a, b) => b.revenueCollected - a.revenueCollected);
+
+  const byGroupStyle = Object.entries(groupStyleMap).map(([name, val]) => ({
+    name,
+    bookingsCount: val.bookings,
+    revenueCollected: val.revenue,
+  })).sort((a, b) => b.revenueCollected - a.revenueCollected);
+
   return {
     summary,
     revenueByRoomTable,
     bookingDetailsTable,
+    demographics: {
+      byCountry,
+      byGender,
+      byAgeGroup,
+      byGroupStyle,
+    },
   };
 }
 
