@@ -1,0 +1,107 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  TENANT_ADMIN
+  TENANT_SALES
+}
+
+model Guesthouse {
+  id                 String       @id @default(uuid())
+  name               String
+  whatsappPhoneId    String?      // Meta WhatsApp Business Phone Number ID
+  whatsappToken      String?      // Meta WhatsApp System User Access Token
+  whatsappBusinessId String?      // Meta WhatsApp Business Account ID
+  subscriptionStatus String       @default("ACTIVE") // ACTIVE, TRIAL, PAST_DUE, CANCELLED
+  subscriptionEndsAt DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  users              User[]
+  bookings           Booking[]
+  customers          Customer[]
+  campaigns          Campaign[]
+  messageLogs        MessageLog[]
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  password     String     // Hashed password
+  name         String
+  role         Role       @default(TENANT_SALES)
+  guesthouseId String?    // Nullable for SUPER_ADMIN
+  guesthouse   Guesthouse? @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Booking {
+  id                  String       @id @default(uuid())
+  guesthouseId        String
+  guesthouse          Guesthouse   @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
+  customerName        String
+  customerEmail       String?
+  customerPhone       String       // Phone number (international format e.g. +1234567890)
+  roomName            String
+  checkIn             DateTime
+  checkOut            DateTime
+  status              String       // CONFIRMED, CHECKED_IN, CHECKED_OUT, CANCELLED
+  totalAmount         Float
+  reviewCollected     Boolean      @default(false)
+  reviewMessageStatus String       @default("PENDING") // PENDING, SENT, FAILED, NO_OPT_IN
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  messageLogs         MessageLog[]
+}
+
+model Customer {
+  id           String     @id @default(uuid())
+  guesthouseId String
+  guesthouse   Guesthouse @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
+  name         String
+  email        String?
+  phone        String
+  optInPromo   Boolean    @default(false) // Marketing consent
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([guesthouseId, phone])
+}
+
+model Campaign {
+  id              String     @id @default(uuid())
+  guesthouseId    String
+  guesthouse      Guesthouse @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
+  name            String
+  messageTemplate String     // Approved WhatsApp Meta Template Name or Custom Text
+  status          String     // DRAFT, SCHEDULED, SENT
+  scheduledAt     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+model MessageLog {
+  id           String     @id @default(uuid())
+  guesthouseId String
+  guesthouse   Guesthouse @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
+  bookingId    String?
+  booking      Booking?   @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  phone        String     // Recipient phone number
+  direction    String     // OUTBOUND, INBOUND
+  messageType  String     // PROMO, REVIEW_REQUEST, GENERAL
+  content      String
+  status       String     // PENDING, SENT, DELIVERED, READ, FAILED
+  createdAt    DateTime   @default(now())
+}

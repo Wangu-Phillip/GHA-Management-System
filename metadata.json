@@ -1,0 +1,6 @@
+{
+  "name": "Guesthouse Management Portal",
+  "description": "Multi-tenant guesthouse management system featuring AI occupancy analytics, automated WhatsApp marketing and review collection, csv/excel data imports, and a super-admin portal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
