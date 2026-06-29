@@ -1,17 +1,15 @@
-import app, { type Bindings } from './app';
+import app, { type Bindings, type Variables } from './server';
+import { Context } from 'hono';
 
-export default {
-  async fetch(request: Request, env: Bindings, ctx: ExecutionContext): Promise<Response> {
-    const url = new URL(request.url);
+// Serve the SPA for any non-API route by falling through to the ASSETS binding.
+app.notFound(async (c: Context<{ Bindings: Bindings; Variables: Variables }>) => {
+  if (c.env?.ASSETS) {
+    return c.env.ASSETS.fetch(c.req.raw);
+  }
+  return c.text('Assets binding not configured', 500);
+});
 
-    if (url.pathname.startsWith('/api/')) {
-      return app.fetch(request, env, ctx);
-    }
-
-    // Hand non-API requests to the static assets binding (SPA).
-    if (env.ASSETS) {
-      return env.ASSETS.fetch(request);
-    }
-    return new Response('Assets binding not configured', { status: 500 });
-  },
-};
+// Export the Hono app directly as the Worker default export.
+// Hono implements ExportedHandler, so Cloudflare calls app.fetch(request, env, ctx)
+// with the correct `this` binding — no manual wrapping needed.
+export default app;
