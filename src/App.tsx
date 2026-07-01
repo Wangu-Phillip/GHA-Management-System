@@ -16,7 +16,8 @@ import {
   ChevronRight,
   Database,
   Building,
-  Settings
+  Settings,
+  Megaphone
 } from 'lucide-react';
 
 import { User, Guesthouse, Booking, Customer, MessageLog, Campaign } from './types';
@@ -28,6 +29,7 @@ import ReportsView from './components/ReportsView';
 import AiAnalyticsView from './components/AiAnalyticsView';
 import SuperAdminView from './components/SuperAdminView';
 import SettingsView from './components/SettingsView';
+import FacebookAdsView from './components/FacebookAdsView';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -354,6 +356,17 @@ export default function App() {
                 </button>
 
                 <button
+                  onClick={() => setActiveTab('facebook-ads')}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
+                    activeTab === 'facebook-ads' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+                  }`}
+                  id="nav-facebook-ads"
+                >
+                  <Megaphone className="h-4 w-4 text-blue-400" />
+                  Facebook Ads
+                </button>
+
+                <button
                   onClick={() => setActiveTab('marketing')}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
                     activeTab === 'marketing' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
@@ -549,6 +562,12 @@ export default function App() {
 
               {activeTab === 'reports' && guesthouse && (
                 <ReportsView guesthouseId={guesthouse.id} />
+              )}
+
+              {activeTab === 'facebook-ads' && guesthouse && (
+                <FacebookAdsView
+                  guesthouseId={guesthouse.id}
+                />
               )}
 
               {activeTab === 'ai-analytics' && guesthouse && (

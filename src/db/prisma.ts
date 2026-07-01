@@ -92,3 +92,86 @@ export interface MessageLogData {
   status: string;
   createdAt: Date;
 }
+
+// ─── Facebook Ads Data Interfaces ─────────────────────────────────────────────
+
+export interface FacebookAdAccountData {
+  id: string;
+  guesthouseId: string;
+  adAccountId: string;
+  accessToken: string;
+  pageId: string | null;
+  accountName: string | null;
+  currency: string | null;
+  timezone: string | null;
+  connectedAt: Date;
+  updatedAt: Date;
+}
+
+export interface FacebookCampaignData {
+  id: string;
+  guesthouseId: string;
+  adAccountId: string;
+  name: string;
+  status: string;
+  objective: string | null;
+  dailyBudget: number | null;
+  lifetimeBudget: number | null;
+  startTime: Date | null;
+  stopTime: Date | null;
+  syncedAt: Date;
+  createdAt: Date;
+}
+
+export interface FacebookAdSetData {
+  id: string;
+  guesthouseId: string;
+  campaignId: string;
+  name: string;
+  status: string;
+  dailyBudget: number | null;
+  targeting: string | null;
+  bidStrategy: string | null;
+  syncedAt: Date;
+}
+
+export interface FacebookAdData {
+  id: string;
+  guesthouseId: string;
+  adSetId: string;
+  name: string;
+  status: string;
+  creativeTitle: string | null;
+  creativeBody: string | null;
+  previewUrl: string | null;
+  syncedAt: Date;
+}
+
+export interface FacebookInsightData {
+  id: string;
+  guesthouseId: string;
+  adAccountId: string;
+  objectId: string;
+  objectLevel: string;
+  objectName: string | null;
+  date: string;
+  impressions: number;
+  clicks: number;
+  spend: number;
+  reach: number;
+  conversions: number;
+  cpm: number | null;
+  ctr: number | null;
+  cpc: number | null;
+  roas: number | null;
+  syncedAt: Date;
+}
+
+export interface AiAdvisorCacheData {
+  id: string;
+  guesthouseId: string;
+  windowDays: number;
+  adviceJson: string;
+  generatedAt: Date;
+}
+

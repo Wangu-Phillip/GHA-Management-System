@@ -29,6 +29,12 @@ model Guesthouse {
   customers           Customer[]
   campaigns           Campaign[]
   messageLogs         MessageLog[]
+  facebookAdAccount   FacebookAdAccount?
+  facebookCampaigns   FacebookCampaign[]
+  facebookAdSets      FacebookAdSet[]
+  facebookAds         FacebookAd[]
+  facebookInsights    FacebookInsight[]
+  aiAdvisorCaches     AiAdvisorCache[]
 }
 
 model User {
@@ -110,4 +116,109 @@ model MessageLog {
   content      String
   status       String     @default("PENDING")
   createdAt    DateTime   @default(now())
+}
+
+// ─── Facebook Ads Integration ────────────────────────────────────────────────
+
+model FacebookAdAccount {
+  id           String    @id @default(uuid())
+  guesthouseId String    @unique
+  guesthouse   Guesthouse @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
+  adAccountId  String    // e.g. act_1234567890
+  accessToken  String
+  pageId       String?
+  accountName  String?
+  currency     String?   @default("USD")
+  timezone     String?   @default("UTC")
+  connectedAt  DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model FacebookCampaign {
+  id             String    @id  // Facebook Campaign ID
+  guesthouseId   String
+  guesthouse     Guesthouse @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
+  adAccountId    String
+  name           String
+  status         String    @default("PAUSED")
+  objective      String?
+  dailyBudget    Float?
+  lifetimeBudget Float?
+  startTime      DateTime?
+  stopTime       DateTime?
+  syncedAt       DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+
+  adSets         FacebookAdSet[]
+
+  @@index([guesthouseId])
+}
+
+model FacebookAdSet {
+  id           String          @id  // Facebook AdSet ID
+  guesthouseId String
+  guesthouse   Guesthouse      @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
+  campaignId   String
+  campaign     FacebookCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name         String
+  status       String          @default("PAUSED")
+  dailyBudget  Float?
+  targeting    String?         // JSON blob
+  bidStrategy  String?
+  syncedAt     DateTime        @default(now())
+
+  ads          FacebookAd[]
+
+  @@index([campaignId])
+}
+
+model FacebookAd {
+  id            String        @id  // Facebook Ad ID
+  guesthouseId  String
+  guesthouse    Guesthouse    @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
+  adSetId       String
+  adSet         FacebookAdSet @relation(fields: [adSetId], references: [id], onDelete: Cascade)
+  name          String
+  status        String        @default("PAUSED")
+  creativeTitle String?
+  creativeBody  String?
+  previewUrl    String?
+  syncedAt      DateTime      @default(now())
+
+  @@index([adSetId])
+}
+
+model FacebookInsight {
+  id           String    @id @default(uuid())
+  guesthouseId String
+  guesthouse   Guesthouse @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
+  adAccountId  String
+  objectId     String    // campaign/adset/ad ID
+  objectLevel  String    // CAMPAIGN | ADSET | AD | ACCOUNT
+  objectName   String?
+  date         String    // YYYY-MM-DD
+  impressions  Int       @default(0)
+  clicks       Int       @default(0)
+  spend        Float     @default(0)
+  reach        Int       @default(0)
+  conversions  Int       @default(0)
+  cpm          Float?    @default(0)
+  ctr          Float?    @default(0)
+  cpc          Float?    @default(0)
+  roas         Float?    @default(0)
+  syncedAt     DateTime  @default(now())
+
+  @@unique([adAccountId, objectId, objectLevel, date])
+  @@index([guesthouseId, date])
+}
+
+model AiAdvisorCache {
+  id           String    @id @default(uuid())
+  guesthouseId String
+  guesthouse   Guesthouse @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
+  windowDays   Int       @default(30)
+  adviceJson   String    // Full serialized JSON from Gemini
+  generatedAt  DateTime  @default(now())
+
+  @@unique([guesthouseId, windowDays])
 }

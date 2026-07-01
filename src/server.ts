@@ -8,6 +8,16 @@ import {
   executeMarketingCampaign,
 } from './services/whatsapp';
 import { compileReportData, convertToCSV } from './services/reports';
+import {
+  fetchAdInsights,
+  fetchCampaigns,
+  createCampaign,
+  updateCampaignBudget,
+  generateMockInsights,
+  generateMockCampaigns,
+} from './services/facebook';
+import { getOrGenerateAdvisorAdvice } from './services/facebook_ai';
+
 
 export type Bindings = {
   DB: D1Database;
@@ -702,6 +712,329 @@ app.get('/api/reports/download-csv', async (c) => {
   } catch (err: any) {
     c.status(500);
     return c.text(err.message);
+  }
+});
+
+// ==========================================
+// Facebook Ads Integration
+// ==========================================
+
+// Helper: resolve date range string to since/until YYYY-MM-DD
+function getDateRange(days: number): { since: string; until: string } {
+  const until = new Date();
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  return {
+    since: since.toISOString().split('T')[0],
+    until: until.toISOString().split('T')[0],
+  };
+}
+
+// GET /api/facebook/account — get connected Ad Account for this guesthouse
+app.get('/api/facebook/account', async (c) => {
+  const guesthouseId = c.req.query('guesthouseId');
+  if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
+  try {
+    const account = await (c.var.prisma as any).facebookAdAccount.findUnique({
+      where: { guesthouseId },
+    });
+    return c.json(account || null);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// PUT /api/facebook/account — save / update Ad Account credentials
+app.put('/api/facebook/account', async (c) => {
+  try {
+    const { guesthouseId, adAccountId, accessToken, pageId, accountName, currency, timezone } =
+      await c.req.json();
+    if (!guesthouseId || !adAccountId || !accessToken) {
+      return c.json({ error: 'guesthouseId, adAccountId, and accessToken are required' }, 400);
+    }
+    const account = await (c.var.prisma as any).facebookAdAccount.upsert({
+      where: { guesthouseId },
+      create: { guesthouseId, adAccountId, accessToken, pageId, accountName, currency, timezone },
+      update: { adAccountId, accessToken, pageId, accountName, currency, timezone, updatedAt: new Date() },
+    });
+    return c.json({ message: 'Ad account connected successfully', account });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// POST /api/facebook/sync — pull latest data from Graph API → normalise → upsert to D1
+app.post('/api/facebook/sync', async (c) => {
+  try {
+    const { guesthouseId, days = 30 } = await c.req.json();
+    if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
+
+    const account = await (c.var.prisma as any).facebookAdAccount.findUnique({
+      where: { guesthouseId },
+    });
+
+    const { since, until } = getDateRange(Number(days));
+    let insights: any[];
+    let campaigns: any[];
+    const isMockMode = !account || !account.accessToken || account.accessToken === 'DEMO_MODE';
+
+    if (isMockMode) {
+      // Use synthetic data when no real credentials are configured
+      insights = generateMockInsights(account?.adAccountId || 'act_demo');
+      campaigns = generateMockCampaigns();
+    } else {
+      // Real Graph API calls
+      insights = await fetchAdInsights(account.accessToken, account.adAccountId, {
+        since,
+        until,
+        level: 'campaign',
+      });
+      campaigns = await fetchCampaigns(account.accessToken, account.adAccountId);
+    }
+
+    // Upsert campaigns into D1
+    for (const camp of campaigns) {
+      await (c.var.prisma as any).facebookCampaign.upsert({
+        where: { id: camp.id },
+        create: {
+          id: camp.id,
+          guesthouseId,
+          adAccountId: account?.adAccountId || 'act_demo',
+          name: camp.name,
+          status: camp.status,
+          objective: camp.objective,
+          dailyBudget: camp.daily_budget ? Number(camp.daily_budget) / 100 : null,
+          lifetimeBudget: camp.lifetime_budget ? Number(camp.lifetime_budget) / 100 : null,
+          startTime: camp.start_time ? new Date(camp.start_time) : null,
+          stopTime: camp.stop_time ? new Date(camp.stop_time) : null,
+        },
+        update: {
+          name: camp.name,
+          status: camp.status,
+          dailyBudget: camp.daily_budget ? Number(camp.daily_budget) / 100 : null,
+          syncedAt: new Date(),
+        },
+      });
+    }
+
+    // Upsert normalised insights into D1
+    let upsertedCount = 0;
+    for (const ins of insights) {
+      await (c.var.prisma as any).facebookInsight.upsert({
+        where: {
+          adAccountId_objectId_objectLevel_date: {
+            adAccountId: account?.adAccountId || 'act_demo',
+            objectId: ins.objectId,
+            objectLevel: ins.objectLevel,
+            date: ins.date,
+          },
+        },
+        create: {
+          guesthouseId,
+          adAccountId: account?.adAccountId || 'act_demo',
+          objectId: ins.objectId,
+          objectLevel: ins.objectLevel,
+          objectName: ins.objectName,
+          date: ins.date,
+          impressions: ins.impressions,
+          clicks: ins.clicks,
+          spend: ins.spend,
+          reach: ins.reach,
+          conversions: ins.conversions,
+          cpm: ins.cpm,
+          ctr: ins.ctr,
+          cpc: ins.cpc,
+          roas: ins.roas,
+        },
+        update: {
+          impressions: ins.impressions,
+          clicks: ins.clicks,
+          spend: ins.spend,
+          reach: ins.reach,
+          conversions: ins.conversions,
+          cpm: ins.cpm,
+          ctr: ins.ctr,
+          cpc: ins.cpc,
+          roas: ins.roas,
+          syncedAt: new Date(),
+        },
+      });
+      upsertedCount++;
+    }
+
+    return c.json({
+      message: `Sync complete. Upserted ${upsertedCount} insight rows and ${campaigns.length} campaigns.`,
+      mode: isMockMode ? 'DEMO_MOCK' : 'LIVE_GRAPH_API',
+      insightCount: upsertedCount,
+      campaignCount: campaigns.length,
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// GET /api/facebook/campaigns — list campaigns from D1
+app.get('/api/facebook/campaigns', async (c) => {
+  const guesthouseId = c.req.query('guesthouseId');
+  if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
+  try {
+    const campaigns = await (c.var.prisma as any).facebookCampaign.findMany({
+      where: { guesthouseId },
+      orderBy: { createdAt: 'desc' },
+    });
+    return c.json(campaigns);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// POST /api/facebook/campaigns — create a new campaign via Graph API (or demo mode)
+app.post('/api/facebook/campaigns', async (c) => {
+  try {
+    const { guesthouseId, name, objective, dailyBudget, lifetimeBudget, startTime, stopTime } =
+      await c.req.json();
+    if (!guesthouseId || !name || !objective) {
+      return c.json({ error: 'guesthouseId, name, and objective are required' }, 400);
+    }
+
+    const account = await (c.var.prisma as any).facebookAdAccount.findUnique({
+      where: { guesthouseId },
+    });
+
+    const isMockMode = !account || !account.accessToken || account.accessToken === 'DEMO_MODE';
+    const campaignId = isMockMode
+      ? `mock-camp-${Date.now()}`
+      : (await createCampaign(account.accessToken, account.adAccountId, {
+          name,
+          objective,
+          dailyBudget,
+          lifetimeBudget,
+          startTime,
+          stopTime,
+        })).id;
+
+    const created = await (c.var.prisma as any).facebookCampaign.create({
+      data: {
+        id: campaignId,
+        guesthouseId,
+        adAccountId: account?.adAccountId || 'act_demo',
+        name,
+        status: 'PAUSED',
+        objective,
+        dailyBudget: dailyBudget ? Number(dailyBudget) : null,
+        lifetimeBudget: lifetimeBudget ? Number(lifetimeBudget) : null,
+        startTime: startTime ? new Date(startTime) : null,
+        stopTime: stopTime ? new Date(stopTime) : null,
+      },
+    });
+
+    return c.json({ message: 'Campaign created successfully', campaign: created, mode: isMockMode ? 'DEMO' : 'LIVE' }, 201);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// PATCH /api/facebook/campaigns/:id/budget — update campaign daily budget
+app.patch('/api/facebook/campaigns/:id/budget', async (c) => {
+  const id = c.req.param('id');
+  try {
+    const { guesthouseId, dailyBudget } = await c.req.json();
+    if (!guesthouseId || dailyBudget === undefined) {
+      return c.json({ error: 'guesthouseId and dailyBudget are required' }, 400);
+    }
+
+    const account = await (c.var.prisma as any).facebookAdAccount.findUnique({
+      where: { guesthouseId },
+    });
+
+    const isMockMode = !account || !account.accessToken || account.accessToken === 'DEMO_MODE';
+    if (!isMockMode) {
+      await updateCampaignBudget(account.accessToken, id, Math.round(Number(dailyBudget) * 100));
+    }
+
+    const updated = await (c.var.prisma as any).facebookCampaign.update({
+      where: { id },
+      data: { dailyBudget: Number(dailyBudget), syncedAt: new Date() },
+    });
+
+    return c.json({ message: 'Budget updated successfully', campaign: updated });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// GET /api/facebook/insights — query insight rows with optional filters
+app.get('/api/facebook/insights', async (c) => {
+  const guesthouseId = c.req.query('guesthouseId');
+  const days = c.req.query('days') || '30';
+  const level = c.req.query('level') || 'CAMPAIGN';
+  const campaignId = c.req.query('campaignId');
+
+  if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
+
+  try {
+    const { since } = getDateRange(Number(days));
+    const where: any = {
+      guesthouseId,
+      objectLevel: level.toUpperCase(),
+      date: { gte: since },
+    };
+    if (campaignId) where.objectId = campaignId;
+
+    const rows = await (c.var.prisma as any).facebookInsight.findMany({
+      where,
+      orderBy: { date: 'asc' },
+    });
+    return c.json(rows);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// GET /api/facebook/ai-advisor — return cached (or freshly generated) AI advice
+app.get('/api/facebook/ai-advisor', async (c) => {
+  const guesthouseId = c.req.query('guesthouseId');
+  const windowDays = Number(c.req.query('windowDays') || '30');
+  if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
+
+  try {
+    const gh = await c.var.prisma.guesthouse.findUnique({ where: { id: guesthouseId } });
+    if (!gh) return c.json({ error: 'Guesthouse not found' }, 404);
+
+    const advice = await getOrGenerateAdvisorAdvice(
+      c.var.prisma,
+      guesthouseId,
+      windowDays,
+      gh.name,
+      c.env?.GEMINI_API_KEY,
+      false
+    );
+    return c.json(advice);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// POST /api/facebook/ai-advisor/regenerate — force-invalidate cache and regenerate
+app.post('/api/facebook/ai-advisor/regenerate', async (c) => {
+  try {
+    const { guesthouseId, windowDays = 30 } = await c.req.json();
+    if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
+
+    const gh = await c.var.prisma.guesthouse.findUnique({ where: { id: guesthouseId } });
+    if (!gh) return c.json({ error: 'Guesthouse not found' }, 404);
+
+    const advice = await getOrGenerateAdvisorAdvice(
+      c.var.prisma,
+      guesthouseId,
+      Number(windowDays),
+      gh.name,
+      c.env?.GEMINI_API_KEY,
+      true // forceRegenerate
+    );
+    return c.json(advice);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
   }
 });
 

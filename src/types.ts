@@ -133,3 +133,85 @@ export interface CompiledReport {
     byGroupStyle: Array<{ name: string; bookingsCount: number; revenueCollected: number }>;
   };
 }
+
+// ─── Facebook Ads Types ───────────────────────────────────────────────────────
+
+export interface FacebookAdAccount {
+  id: string;
+  guesthouseId: string;
+  adAccountId: string;
+  accessToken: string;
+  pageId?: string;
+  accountName?: string;
+  currency?: string;
+  timezone?: string;
+  connectedAt: string;
+  updatedAt: string;
+}
+
+export interface FacebookCampaign {
+  id: string;
+  guesthouseId: string;
+  adAccountId: string;
+  name: string;
+  status: 'ACTIVE' | 'PAUSED' | 'ARCHIVED' | 'DELETED';
+  objective?: string;
+  dailyBudget?: number;
+  lifetimeBudget?: number;
+  startTime?: string;
+  stopTime?: string;
+  syncedAt: string;
+  createdAt: string;
+}
+
+export interface FacebookInsight {
+  id: string;
+  guesthouseId: string;
+  adAccountId: string;
+  objectId: string;
+  objectLevel: 'CAMPAIGN' | 'ADSET' | 'AD' | 'ACCOUNT';
+  objectName?: string;
+  date: string;
+  impressions: number;
+  clicks: number;
+  spend: number;
+  reach: number;
+  conversions: number;
+  cpm?: number;
+  ctr?: number;
+  cpc?: number;
+  roas?: number;
+  syncedAt: string;
+}
+
+export interface BudgetSuggestion {
+  campaignId: string;
+  campaignName: string;
+  currentDailyBudget: number;
+  suggestedDailyBudget: number;
+  rationale: string;
+}
+
+export interface CampaignPerformanceSummary {
+  campaignId: string;
+  campaignName: string;
+  totalSpend: number;
+  totalImpressions: number;
+  totalClicks: number;
+  totalConversions: number;
+  avgCtr: number;
+  avgCpc: number;
+  avgRoas: number;
+}
+
+export interface AdvisorAdvice {
+  performanceSummary: string;
+  budgetSuggestions: BudgetSuggestion[];
+  topPerformers: CampaignPerformanceSummary[];
+  bottomPerformers: CampaignPerformanceSummary[];
+  audienceInsights: string;
+  outlook30Days: string;
+  generatedAt: string;
+  windowDays: number;
+  isFromCache: boolean;
+}
