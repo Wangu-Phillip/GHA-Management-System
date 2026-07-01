@@ -11,30 +11,38 @@ Multi-tenant guesthouse management SaaS: AI occupancy analytics, WhatsApp market
 ```
 Browser  ──►  Cloudflare Worker
                 │
-                ├──  /api/*    →  Hono router (src/app.ts)  →  Prisma + D1
+                ├──  /api/*    →  Hono router (src/server.ts)  →  Prisma + D1
                 └──  rest      →  ASSETS binding (dist/client SPA)
 ```
 
 - Worker entry: [src/worker.ts](src/worker.ts)
-- API routes: [src/app.ts](src/app.ts)
+- API routes: [src/server.ts](src/server.ts)
 - D1 schema: [prisma/schema.prisma](prisma/schema.prisma)
 - Migrations: [migrations/](migrations/) (raw SQL, applied by `wrangler d1 migrations apply`)
 
 ---
 
-## Local development
+## How To Run This Application Locally In Dev Mode
 
+To run this application locally, you will need to open **two separate terminal windows** (since the backend and frontend run on different development servers).
+
+**First-time setup (run this once):**
 ```powershell
 npm install
 npm run prisma:generate
 npm run db:migrate:local            # apply schema + seed to local D1
 ```
 
-Run frontend + worker in two terminals:
-
+**Terminal 1 (Start the Backend Worker):**
+This starts the Cloudflare Worker environment locally on port `8787` simulating your D1 database.
 ```powershell
-npm run dev:worker                  # wrangler dev on :8787 (Hono + local D1)
-npm run dev                         # vite on :5173, proxies /api → :8787
+npm run dev:worker
+```
+
+**Terminal 2 (Start the Frontend SPA):**
+This starts the React/Vite development server on port `5173`. The Vite config will automatically proxy `/api` requests to your backend worker running on port `8787`.
+```powershell
+npm run dev
 ```
 
 Open http://localhost:5173
@@ -116,7 +124,7 @@ These are mock implementations from the AI-Studio scaffold. Replace before servi
 | Path | Purpose |
 |---|---|
 | [src/worker.ts](src/worker.ts) | Cloudflare Worker entry — routes `/api/*` to Hono, everything else to ASSETS |
-| [src/app.ts](src/app.ts) | Hono router + all API handlers |
+| [src/server.ts](src/server.ts) | Hono router + all API handlers |
 | [src/db/prisma.ts](src/db/prisma.ts) | D1 PrismaClient factory + row types |
 | [src/services/](src/services/) | AI forecast, WhatsApp delivery, reports/CSV |
 | [src/components/](src/components/) | React views (frontend) |
