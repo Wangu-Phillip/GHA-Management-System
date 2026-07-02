@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Calendar, PlusCircle, Search, Upload, CheckCircle2, Trash2, ArrowUpRight, HelpCircle, Settings, X } from 'lucide-react';
+import { Calendar, PlusCircle, Search, Upload, CheckCircle2, Trash2, ArrowUpRight, HelpCircle, Settings, X, ChevronLeft, ChevronRight, LayoutList } from 'lucide-react';
 import { Booking, Guesthouse } from '../types';
 
 interface BookingsViewProps {
@@ -10,11 +10,41 @@ interface BookingsViewProps {
   onUpdateGuesthouse: (gh: Guesthouse) => void;
 }
 
+// ── Calendar Helpers ──────────────────────────────────────────────────────────
+
+function getDaysInMonth(year: number, month: number) {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+function getFirstDayOfMonth(year: number, month: number) {
+  return new Date(year, month, 1).getDay(); // 0=Sun
+}
+
+const MONTH_NAMES = [
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December',
+];
+
+const STATUS_COLORS: Record<string, string> = {
+  CONFIRMED:   'bg-indigo-100 text-indigo-800 border-indigo-200',
+  CHECKED_IN:  'bg-emerald-100 text-emerald-800 border-emerald-200',
+  CHECKED_OUT: 'bg-gray-100 text-gray-600 border-gray-200',
+  CANCELLED:   'bg-red-100 text-red-700 border-red-200',
+};
+
+// ── Main Component ────────────────────────────────────────────────────────────
+
 export default function BookingsView({ bookings, guesthouseId, guesthouse, onRefresh, onUpdateGuesthouse }: BookingsViewProps) {
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [dateFilter, setDateFilter] = useState('ALL');
-  
+
+  // Calendar nav state
+  const today = new Date();
+  const [calYear, setCalYear] = useState(today.getFullYear());
+  const [calMonth, setCalMonth] = useState(today.getMonth());
+
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -22,13 +52,15 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
   const [newRoomInput, setNewRoomInput] = useState('');
   const [updatingRooms, setUpdatingRooms] = useState(false);
 
-  const roomsList = guesthouse?.rooms && guesthouse.rooms.length > 0 ? guesthouse.rooms : [
-    'Suite 101 - Oak Haven',
-    'Room 202 - Pine view',
-    'Room 203 - Cozy Studio',
-    'Beachfront Cabin A',
-    'Horizon Suite'
-  ];
+  // D1/SQLite stores JSON as a string — parse it safely before use
+  const parseRooms = (raw: any): string[] => {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    try { const p = JSON.parse(raw); return Array.isArray(p) ? p : []; } catch { return []; }
+  };
+  const roomsList = parseRooms(guesthouse?.rooms).length > 0
+    ? parseRooms(guesthouse?.rooms)
+    : ['Suite 101 - Oak Haven', 'Room 202 - Pine view', 'Room 203 - Cozy Studio', 'Beachfront Cabin A', 'Horizon Suite'];
 
   const handleRoomAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,7 +182,6 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
 
       if (response.ok) {
         setShowAddModal(false);
-        // Reset
         setFormData({
           customerName: '',
           customerEmail: '',
@@ -221,15 +252,12 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
     const lines = text.split(/\r?\n/);
     const results: any[] = [];
     
-    // Simple header matching or fallback column counts
-    // Expected header: customerName,customerPhone,roomName,checkIn,checkOut,totalAmount,customerEmail
     let headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
     
     for (let i = 1; i < lines.length; i++) {
       if (!lines[i].trim()) continue;
       const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
       
-      // Map columns
       const row: any = {
         customerName: values[0] || '',
         customerPhone: values[1] || '',
@@ -281,7 +309,7 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
     }
   };
 
-  // Submit Bulk Ingestion to backend Prisma ORM
+  // Submit Bulk Ingestion to backend
   const triggerBulkImport = async () => {
     if (parsedRows.length === 0) return;
     setImportStatus('uploading');
@@ -315,6 +343,56 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
     }
   };
 
+  // ── Calendar helpers ─────────────────────────────────────────────────────────
+
+  const calPrevMonth = () => {
+    if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
+    else setCalMonth(m => m - 1);
+  };
+
+  const calNextMonth = () => {
+    if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); }
+    else setCalMonth(m => m + 1);
+  };
+
+  // Get bookings that overlap a given calendar day
+  const getBookingsForDay = (day: number) => {
+    const dayDate = new Date(calYear, calMonth, day);
+    dayDate.setHours(0, 0, 0, 0);
+    const nextDay = new Date(dayDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+
+    return bookings.filter(b => {
+      const ci = new Date(b.checkIn);
+      const co = new Date(b.checkOut);
+      ci.setHours(0, 0, 0, 0);
+      co.setHours(0, 0, 0, 0);
+      return ci < nextDay && co >= dayDate;
+    });
+  };
+
+  const openAddForDay = (day: number) => {
+    const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    setFormData(prev => ({ ...prev, checkIn: dateStr, checkOut: '', customerName: '', customerPhone: '', totalAmount: '', roomName: roomsList[0] || '' }));
+    setShowAddModal(true);
+  };
+
+  const daysInMonth = getDaysInMonth(calYear, calMonth);
+  const firstDay = getFirstDayOfMonth(calYear, calMonth);
+  const calCells = Array.from({ length: firstDay }, () => null).concat(
+    Array.from({ length: daysInMonth }, (_, i) => i + 1)
+  );
+  // Pad to full weeks
+  while (calCells.length % 7 !== 0) calCells.push(null);
+
+  const isToday = (day: number | null) =>
+    day !== null &&
+    day === today.getDate() &&
+    calMonth === today.getMonth() &&
+    calYear === today.getFullYear();
+
+  // ── Render ───────────────────────────────────────────────────────────────────
+
   return (
     <div className="space-y-6" id="bookings-view">
       {/* Search and Action header */}
@@ -331,35 +409,58 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
           />
         </div>
 
-        <div className="flex items-center gap-3" id="bookings-actions">
-          {/* Status filter selection */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3.5 py-2.5 bg-white border border-gray-100 rounded-xl text-xs font-semibold text-gray-700 shadow-sm focus:outline-none"
-            id="bookings-filter-select"
-          >
-            <option value="ALL">All Statuses</option>
-            <option value="CONFIRMED">Confirmed</option>
-            <option value="CHECKED_IN">Checked In</option>
-            <option value="CHECKED_OUT">Checked Out</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
+        <div className="flex items-center gap-3 flex-wrap" id="bookings-actions">
+          {/* View Toggle */}
+          <div className="flex items-center bg-white border border-gray-100 rounded-xl p-1 shadow-sm" id="view-toggle">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${viewMode === 'list' ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-400 hover:text-gray-700'}`}
+              id="toggle-list-view"
+            >
+              <LayoutList className="h-3.5 w-3.5" />
+              List
+            </button>
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${viewMode === 'calendar' ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-400 hover:text-gray-700'}`}
+              id="toggle-calendar-view"
+            >
+              <Calendar className="h-3.5 w-3.5" />
+              Calendar
+            </button>
+          </div>
 
-          {/* Date Range filter selection */}
-          <select
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            className="px-3.5 py-2.5 bg-white border border-gray-100 rounded-xl text-xs font-semibold text-gray-700 shadow-sm focus:outline-none bg-white"
-            id="bookings-date-filter-select"
-          >
-            <option value="ALL">All Time</option>
-            <option value="TODAY">Current Day</option>
-            <option value="WEEK">Current Week (7d)</option>
-            <option value="MONTH">Current Month (30d)</option>
-            <option value="90DAYS">Last 90 Days</option>
-            <option value="YEAR">Current Year (365d)</option>
-          </select>
+          {/* Status filter - only show in list mode */}
+          {viewMode === 'list' && (
+            <>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3.5 py-2.5 bg-white border border-gray-100 rounded-xl text-xs font-semibold text-gray-700 shadow-sm focus:outline-none"
+                id="bookings-filter-select"
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="CONFIRMED">Confirmed</option>
+                <option value="CHECKED_IN">Checked In</option>
+                <option value="CHECKED_OUT">Checked Out</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+
+              <select
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="px-3.5 py-2.5 bg-white border border-gray-100 rounded-xl text-xs font-semibold text-gray-700 shadow-sm focus:outline-none bg-white"
+                id="bookings-date-filter-select"
+              >
+                <option value="ALL">All Time</option>
+                <option value="TODAY">Current Day</option>
+                <option value="WEEK">Current Week (7d)</option>
+                <option value="MONTH">Current Month (30d)</option>
+                <option value="90DAYS">Last 90 Days</option>
+                <option value="YEAR">Current Year (365d)</option>
+              </select>
+            </>
+          )}
 
           <button
             onClick={() => setShowImportModal(true)}
@@ -403,98 +504,203 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
         </div>
       </div>
 
-      {/* Bookings log table */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden" id="bookings-table-panel">
-        <div className="overflow-x-auto" id="bookings-table-wrapper">
-          <table className="w-full text-left border-collapse" id="bookings-table">
-            <thead>
-              <tr className="bg-gray-50/75 text-xs font-bold text-gray-500 border-b border-gray-100" id="table-head-row">
-                <th className="p-4">Guest Info</th>
-                <th className="p-4">Room Name</th>
-                <th className="p-4">Check-In</th>
-                <th className="p-4">Check-Out</th>
-                <th className="p-4">Total Amount</th>
-                <th className="p-4">Status</th>
-                <th className="p-4">Review Message</th>
-                <th className="p-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50 text-xs" id="table-body">
-              {filteredBookings.length > 0 ? (
-                filteredBookings.map((b) => (
-                  <tr key={b.id} className="hover:bg-gray-50/50 transition-colors" id={`booking-row-${b.id}`}>
-                    <td className="p-4">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-800">{b.customerName}</span>
-                        {b.customerCountry && (
-                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100">
-                            {b.customerCountry}
+      {/* ── CALENDAR VIEW ── */}
+      {viewMode === 'calendar' && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden" id="calendar-panel">
+          {/* Calendar Nav */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50" id="cal-nav">
+            <button onClick={calPrevMonth} className="p-2 rounded-xl hover:bg-gray-100 text-gray-500 transition-colors" id="cal-prev">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <div className="text-center">
+              <h3 className="font-bold text-gray-900 text-sm">{MONTH_NAMES[calMonth]} {calYear}</h3>
+              <p className="text-[10px] text-gray-400 font-medium mt-0.5">Tap any day to create a booking · Color = status</p>
+            </div>
+            <button onClick={calNextMonth} className="p-2 rounded-xl hover:bg-gray-100 text-gray-500 transition-colors" id="cal-next">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Legend */}
+          <div className="px-6 py-2 border-b border-gray-50 flex items-center gap-4 flex-wrap bg-white" id="cal-legend">
+            {Object.entries(STATUS_COLORS).map(([status, cls]) => (
+              <div key={status} className="flex items-center gap-1.5">
+                <span className={`h-2.5 w-2.5 rounded-full border ${cls}`} />
+                <span className="text-[10px] font-semibold text-gray-500">{status.replace('_', ' ')}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Day-of-week headers */}
+          <div className="grid grid-cols-7 border-b border-gray-100" id="cal-dow-headers">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+              <div key={d} className="text-center py-2 text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">
+                {d}
+              </div>
+            ))}
+          </div>
+
+          {/* Grid cells */}
+          <div className="grid grid-cols-7 divide-x divide-gray-50" id="cal-grid">
+            {calCells.map((day, idx) => {
+              const dayBookings = day !== null ? getBookingsForDay(day) : [];
+              const isTodayCell = isToday(day);
+              return (
+                <div
+                  key={idx}
+                  onClick={() => day !== null && openAddForDay(day)}
+                  className={`min-h-[90px] sm:min-h-[110px] p-2 border-b border-gray-50 flex flex-col gap-1 transition-colors ${
+                    day === null
+                      ? 'bg-gray-50/30 cursor-default'
+                      : 'cursor-pointer hover:bg-indigo-50/30 active:bg-indigo-100/30'
+                  }`}
+                  id={day !== null ? `cal-day-${day}` : `cal-empty-${idx}`}
+                >
+                  {day !== null && (
+                    <>
+                      <span className={`text-xs font-bold self-start leading-none rounded-full w-6 h-6 flex items-center justify-center ${
+                        isTodayCell
+                          ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-300'
+                          : 'text-gray-600'
+                      }`}>
+                        {day}
+                      </span>
+
+                      <div className="flex flex-col gap-0.5 overflow-hidden">
+                        {dayBookings.slice(0, 3).map((b) => (
+                          <div
+                            key={b.id}
+                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border truncate leading-tight ${STATUS_COLORS[b.status] || STATUS_COLORS.CANCELLED}`}
+                            title={`${b.customerName} · ${b.roomName}`}
+                          >
+                            {b.customerName.split(' ')[0]} · {b.roomName.split(' ').slice(0, 2).join(' ')}
+                          </div>
+                        ))}
+                        {dayBookings.length > 3 && (
+                          <span className="text-[9px] text-gray-400 font-semibold pl-1">
+                            +{dayBookings.length - 3} more
                           </span>
                         )}
+                        {dayBookings.length === 0 && (
+                          <span className="text-[9px] text-gray-300 pl-1 mt-auto">+ Add</span>
+                        )}
                       </div>
-                      <div className="text-gray-400 font-mono text-[10px] mt-0.5">{b.customerPhone}</div>
-                    </td>
-                    <td className="p-4 font-medium text-gray-700">{b.roomName}</td>
-                    <td className="p-4 text-gray-500">{new Date(b.checkIn).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                    <td className="p-4 text-gray-500">{new Date(b.checkOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                    <td className="p-4 font-semibold text-gray-900">P{Number(b.totalAmount).toFixed(2)}</td>
-                    <td className="p-4">
-                      <select
-                        value={b.status}
-                        onChange={(e) => updateBookingStatus(b.id, e.target.value)}
-                        className={`px-2 py-1 rounded-full text-[10px] font-bold border-0 focus:ring-1 focus:ring-gray-900 ${
-                          b.status === 'CONFIRMED' ? 'bg-amber-50 text-amber-700' :
-                          b.status === 'CHECKED_IN' ? 'bg-blue-50 text-blue-700' :
-                          b.status === 'CHECKED_OUT' ? 'bg-green-50 text-green-700' :
-                          'bg-gray-50 text-gray-500'
-                        }`}
-                        id={`status-dropdown-${b.id}`}
-                      >
-                        <option value="CONFIRMED">Confirmed</option>
-                        <option value="CHECKED_IN">Checked In</option>
-                        <option value="CHECKED_OUT">Checked Out</option>
-                        <option value="CANCELLED">Cancelled</option>
-                      </select>
-                    </td>
-                    <td className="p-4">
-                      <span className={`inline-flex items-center gap-1.5 font-medium ${
-                        b.reviewMessageStatus === 'SENT' ? 'text-teal-600' :
-                        b.reviewMessageStatus === 'FAILED' ? 'text-red-500' :
-                        'text-gray-400'
-                      }`} id={`review-status-${b.id}`}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${
-                          b.reviewMessageStatus === 'SENT' ? 'bg-teal-500' :
-                          b.reviewMessageStatus === 'FAILED' ? 'bg-red-500' :
-                          'bg-gray-300'
-                        }`} />
-                        {b.reviewMessageStatus}
-                      </span>
-                    </td>
-                    <td className="p-4 text-right">
-                      <button
-                        onClick={() => deleteBooking(b.id)}
-                        className="text-gray-400 hover:text-red-600 transition-colors p-1"
-                        id={`delete-booking-btn-${b.id}`}
-                        title="Cancel Booking"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Calendar footer summary */}
+          <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between" id="cal-footer">
+            <span className="text-[11px] text-gray-400">
+              {bookings.filter(b => {
+                const ci = new Date(b.checkIn);
+                return ci.getMonth() === calMonth && ci.getFullYear() === calYear;
+              }).length} check-ins this month
+            </span>
+            <span className="text-[11px] text-indigo-600 font-semibold">
+              {bookings.filter(b => b.status === 'CHECKED_IN').length} guests in-house now
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ── LIST VIEW ── */}
+      {viewMode === 'list' && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden" id="bookings-table-panel">
+          <div className="overflow-x-auto" id="bookings-table-wrapper">
+            <table className="w-full text-left border-collapse" id="bookings-table">
+              <thead>
+                <tr className="bg-gray-50/75 text-xs font-bold text-gray-500 border-b border-gray-100" id="table-head-row">
+                  <th className="p-4">Guest Info</th>
+                  <th className="p-4">Room Name</th>
+                  <th className="p-4">Check-In</th>
+                  <th className="p-4">Check-Out</th>
+                  <th className="p-4">Total Amount</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4">Review Message</th>
+                  <th className="p-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50 text-xs" id="table-body">
+                {filteredBookings.length > 0 ? (
+                  filteredBookings.map((b) => (
+                    <tr key={b.id} className="hover:bg-gray-50/50 transition-colors" id={`booking-row-${b.id}`}>
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-gray-800">{b.customerName}</span>
+                          {b.customerCountry && (
+                            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100">
+                              {b.customerCountry}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-gray-400 font-mono text-[10px] mt-0.5">{b.customerPhone}</div>
+                      </td>
+                      <td className="p-4 font-medium text-gray-700">{b.roomName}</td>
+                      <td className="p-4 text-gray-500">{new Date(b.checkIn).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                      <td className="p-4 text-gray-500">{new Date(b.checkOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                      <td className="p-4 font-semibold text-gray-900">P{Number(b.totalAmount).toFixed(2)}</td>
+                      <td className="p-4">
+                        <select
+                          value={b.status}
+                          onChange={(e) => updateBookingStatus(b.id, e.target.value)}
+                          className={`px-2 py-1 rounded-full text-[10px] font-bold border-0 focus:ring-1 focus:ring-gray-900 ${
+                            b.status === 'CONFIRMED' ? 'bg-amber-50 text-amber-700' :
+                            b.status === 'CHECKED_IN' ? 'bg-blue-50 text-blue-700' :
+                            b.status === 'CHECKED_OUT' ? 'bg-green-50 text-green-700' :
+                            'bg-gray-50 text-gray-500'
+                          }`}
+                          id={`status-dropdown-${b.id}`}
+                        >
+                          <option value="CONFIRMED">Confirmed</option>
+                          <option value="CHECKED_IN">Checked In</option>
+                          <option value="CHECKED_OUT">Checked Out</option>
+                          <option value="CANCELLED">Cancelled</option>
+                        </select>
+                      </td>
+                      <td className="p-4">
+                        <span className={`inline-flex items-center gap-1.5 font-medium ${
+                          b.reviewMessageStatus === 'SENT' ? 'text-teal-600' :
+                          b.reviewMessageStatus === 'FAILED' ? 'text-red-500' :
+                          'text-gray-400'
+                        }`} id={`review-status-${b.id}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${
+                            b.reviewMessageStatus === 'SENT' ? 'bg-teal-500' :
+                            b.reviewMessageStatus === 'FAILED' ? 'bg-red-500' :
+                            'bg-gray-300'
+                          }`} />
+                          {b.reviewMessageStatus}
+                        </span>
+                      </td>
+                      <td className="p-4 text-right">
+                        <button
+                          onClick={() => deleteBooking(b.id)}
+                          className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                          id={`delete-booking-btn-${b.id}`}
+                          title="Cancel Booking"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr id="empty-row">
+                    <td colSpan={8} className="p-12 text-center text-gray-400">
+                      <Calendar className="h-8 w-8 mx-auto text-gray-300 mb-2" />
+                      <p className="text-sm font-medium">No bookings logged</p>
+                      <p className="text-xs text-gray-400 mt-1">Try scheduling a booking or importing a CSV spreadsheet.</p>
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr id="empty-row">
-                  <td colSpan={8} className="p-12 text-center text-gray-400">
-                    <Calendar className="h-8 w-8 mx-auto text-gray-300 mb-2" />
-                    <p className="text-sm font-medium">No bookings logged</p>
-                    <p className="text-xs text-gray-400 mt-1">Try scheduling a booking or importing a CSV spreadsheet.</p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Manual Add Booking Modal */}
       {showAddModal && (
@@ -687,10 +893,7 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
                     <span>{importSummary}</span>
                   </div>
                   <button
-                    onClick={() => {
-                      setParsedRows([]);
-                      setImportStatus('idle');
-                    }}
+                    onClick={() => { setParsedRows([]); setImportStatus('idle'); }}
                     className="text-gray-400 hover:text-gray-600 font-semibold"
                     id="reset-import-btn"
                   >
@@ -734,10 +937,7 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
 
                 <div className="flex justify-end gap-3 pt-4 border-t border-gray-100" id="preview-actions">
                   <button
-                    onClick={() => {
-                      setParsedRows([]);
-                      setImportStatus('idle');
-                    }}
+                    onClick={() => { setParsedRows([]); setImportStatus('idle'); }}
                     disabled={importStatus === 'uploading' || importStatus === 'completed'}
                     className="px-4 py-2 border border-gray-100 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-50"
                   >
@@ -783,7 +983,6 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
             </div>
 
             <div className="space-y-4">
-              {/* Form to add a room */}
               <form onSubmit={handleRoomAdd} className="flex gap-2" id="add-room-form">
                 <input
                   type="text"
@@ -803,7 +1002,6 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
                 </button>
               </form>
 
-              {/* List of existing rooms */}
               <div className="space-y-2 max-h-60 overflow-y-auto" id="rooms-list-container">
                 <span className="text-[10px] font-bold text-gray-400 block uppercase">Active Room / Cabin Inventory</span>
                 {roomsList.length > 0 ? (
