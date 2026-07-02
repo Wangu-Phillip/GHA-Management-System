@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getSessionStatus = exports.sendMessage = exports.getQrCode = void 0;
+exports.getPairingCode = exports.getSessionStatus = exports.sendMessage = exports.getQrCode = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
 const baileys_1 = __importStar(require("@whiskeysockets/baileys"));
@@ -283,11 +283,106 @@ exports.getSessionStatus = (0, https_1.onRequest)({ cors: true }, async (req, re
         res.status(200).json({
             status: data.status || 'UNLINKED',
             qrCodeDataUrl: data.qrCodeDataUrl || null,
+            pairingCode: data.pairingCode || null,
             updatedAt: data.updatedAt ? data.updatedAt.toDate() : null
         });
     }
     catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+// ── API 4: REQUEST PHONE OTP PAIRING CODE ────────────────────────────────────
+exports.getPairingCode = (0, https_1.onRequest)({ cors: true }, async (req, res) => {
+    const guesthouseId = req.query.guesthouseId || req.body.guesthouseId;
+    const phone = req.query.phone || req.body.phone;
+    if (!guesthouseId || !phone) {
+        res.status(400).json({ error: 'guesthouseId and phone are required' });
+        return;
+    }
+    const normalizedPhone = phone.replace(/[^0-9]/g, '');
+    try {
+        const { state, saveCreds } = await useFirestoreAuthState(guesthouseId);
+        const sock = (0, baileys_1.default)({
+            auth: state,
+            logger: (0, pino_1.default)({ level: 'info' }),
+            browser: ['macOS', 'Chrome', '125.0.0.3'],
+            printQRInTerminal: false
+        });
+        let codeSent = false;
+        // Timeout safety net (25 seconds)
+        const timeoutId = setTimeout(() => {
+            if (!codeSent && !res.headersSent) {
+                codeSent = true;
+                try {
+                    sock.end(undefined);
+                }
+                catch { }
+                res.status(504).json({ error: 'Timeout generating OTP pairing code. Please try again.' });
+            }
+        }, 25000);
+        sock.ev.on('creds.update', saveCreds);
+        sock.ev.on('connection.update', async (update) => {
+            const { connection, lastDisconnect } = update;
+            if (res.headersSent)
+                return;
+            if (connection === 'open') {
+                clearTimeout(timeoutId);
+                await db.collection('whatsapp_sessions').doc(guesthouseId).set({
+                    status: 'LINKED',
+                    pairingCode: null,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+                try {
+                    sock.end(undefined);
+                }
+                catch { }
+            }
+            if (connection === 'close') {
+                const statusCode = lastDisconnect?.error?.output?.statusCode;
+                const isLoggedOut = statusCode === baileys_1.DisconnectReason.loggedOut;
+                const isConnectionFailure = lastDisconnect?.error?.message?.includes('Connection Failure') ||
+                    lastDisconnect?.error?.message?.includes('handshake') ||
+                    statusCode === 500;
+                if ((isLoggedOut || isConnectionFailure) && !codeSent) {
+                    clearTimeout(timeoutId);
+                    try {
+                        await db.collection('whatsapp_sessions').doc(guesthouseId).delete();
+                    }
+                    catch { }
+                    res.status(401).json({ error: 'Connection failure setting up pairing session. Please retry.' });
+                    try {
+                        sock.end(undefined);
+                    }
+                    catch { }
+                }
+            }
+        });
+        // Wait 1.5 seconds to load credentials and issue pairing request
+        setTimeout(async () => {
+            if (res.headersSent)
+                return;
+            try {
+                const code = await sock.requestPairingCode(normalizedPhone);
+                codeSent = true;
+                clearTimeout(timeoutId);
+                await db.collection('whatsapp_sessions').doc(guesthouseId).set({
+                    status: 'AWAITING_SCAN',
+                    pairingCode: code,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+                res.status(200).json({ pairingCode: code, status: 'AWAITING_SCAN' });
+            }
+            catch (err) {
+                if (!res.headersSent) {
+                    res.status(500).json({ error: 'Failed to request WhatsApp pairing code', details: err.message });
+                }
+            }
+        }, 1500);
+    }
+    catch (err) {
+        if (!res.headersSent) {
+            res.status(500).json({ error: err.message });
+        }
     }
 });
 //# sourceMappingURL=index.js.map

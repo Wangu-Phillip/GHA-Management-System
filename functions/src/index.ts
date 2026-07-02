@@ -268,9 +268,106 @@ export const getSessionStatus = onRequest({ cors: true }, async (req, res) => {
     res.status(200).json({
       status: data.status || 'UNLINKED',
       qrCodeDataUrl: data.qrCodeDataUrl || null,
+      pairingCode: data.pairingCode || null,
       updatedAt: data.updatedAt ? data.updatedAt.toDate() : null
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── API 4: REQUEST PHONE OTP PAIRING CODE ────────────────────────────────────
+export const getPairingCode = onRequest({ cors: true }, async (req, res) => {
+  const guesthouseId = req.query.guesthouseId as string || req.body.guesthouseId as string;
+  const phone = req.query.phone as string || req.body.phone as string;
+
+  if (!guesthouseId || !phone) {
+    res.status(400).json({ error: 'guesthouseId and phone are required' });
+    return;
+  }
+
+  const normalizedPhone = phone.replace(/[^0-9]/g, '');
+
+  try {
+    const { state, saveCreds } = await useFirestoreAuthState(guesthouseId);
+    
+    const sock = makeWASocket({
+      auth: state,
+      logger: pino({ level: 'info' }),
+      browser: ['macOS', 'Chrome', '125.0.0.3'],
+      printQRInTerminal: false
+    });
+
+    let codeSent = false;
+
+    // Timeout safety net (25 seconds)
+    const timeoutId = setTimeout(() => {
+      if (!codeSent && !res.headersSent) {
+        codeSent = true;
+        try { sock.end(undefined); } catch {}
+        res.status(504).json({ error: 'Timeout generating OTP pairing code. Please try again.' });
+      }
+    }, 25000);
+
+    sock.ev.on('creds.update', saveCreds);
+
+    sock.ev.on('connection.update', async (update) => {
+      const { connection, lastDisconnect } = update;
+
+      if (res.headersSent) return;
+
+      if (connection === 'open') {
+        clearTimeout(timeoutId);
+        await db.collection('whatsapp_sessions').doc(guesthouseId).set({
+          status: 'LINKED',
+          pairingCode: null,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        
+        try { sock.end(undefined); } catch {}
+      }
+
+      if (connection === 'close') {
+        const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+        const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+        const isConnectionFailure = lastDisconnect?.error?.message?.includes('Connection Failure') || 
+                                    lastDisconnect?.error?.message?.includes('handshake') ||
+                                    statusCode === 500;
+
+        if ((isLoggedOut || isConnectionFailure) && !codeSent) {
+          clearTimeout(timeoutId);
+          try { await db.collection('whatsapp_sessions').doc(guesthouseId).delete(); } catch {}
+          res.status(401).json({ error: 'Connection failure setting up pairing session. Please retry.' });
+          try { sock.end(undefined); } catch {}
+        }
+      }
+    });
+
+    // Wait 1.5 seconds to load credentials and issue pairing request
+    setTimeout(async () => {
+      if (res.headersSent) return;
+      try {
+        const code = await sock.requestPairingCode(normalizedPhone);
+        codeSent = true;
+        clearTimeout(timeoutId);
+
+        await db.collection('whatsapp_sessions').doc(guesthouseId).set({
+          status: 'AWAITING_SCAN',
+          pairingCode: code,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        res.status(200).json({ pairingCode: code, status: 'AWAITING_SCAN' });
+      } catch (err: any) {
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Failed to request WhatsApp pairing code', details: err.message });
+        }
+      }
+    }, 1500);
+
+  } catch (err: any) {
+    if (!res.headersSent) {
+      res.status(500).json({ error: err.message });
+    }
   }
 });

@@ -125,9 +125,13 @@ export default function MarketingView({
   const [quickText, setQuickText] = useState('');
   const [quickStatus, setQuickStatus] = useState<'idle' | 'sending' | 'success'>('idle');
 
-  // ── QR Linking State ──────────────────────────────────────────────────────────
+  // ── QR/OTP Linking State ──────────────────────────────────────────────────────
   const [qrLinkStatus, setQrLinkStatus] = useState<'idle' | 'scanning' | 'linked'>('idle');
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  const [pairingMethod, setPairingMethod] = useState<'otp' | 'qr'>('otp');
+  const [pairingPhone, setPairingPhone] = useState('');
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [copied, setCopied] = useState(false);
   const QR_SESSION_URL = 'https://web.whatsapp.com/?session=gha-business-link';
 
@@ -141,12 +145,17 @@ export default function MarketingView({
           if (data.status === 'LINKED') {
             setQrLinkStatus('linked');
             setQrCodeUrl(null);
+            setPairingCode(null);
           } else if (data.status === 'AWAITING_SCAN') {
             setQrLinkStatus('scanning');
             setQrCodeUrl(data.qrCodeDataUrl);
+            setPairingCode(data.pairingCode);
+            if (data.pairingCode) setPairingMethod('otp');
+            else if (data.qrCodeDataUrl) setPairingMethod('qr');
           } else {
             setQrLinkStatus('idle');
             setQrCodeUrl(null);
+            setPairingCode(null);
           }
         }
       } catch (err) {
@@ -168,13 +177,16 @@ export default function MarketingView({
           if (data.status === 'LINKED') {
             setQrLinkStatus('linked');
             setQrCodeUrl(null);
+            setPairingCode(null);
             clearInterval(intervalId);
           } else if (data.status === 'UNLINKED' || data.status === 'FAILED') {
             setQrLinkStatus('idle');
             setQrCodeUrl(null);
+            setPairingCode(null);
             clearInterval(intervalId);
-          } else if (data.status === 'AWAITING_SCAN' && data.qrCodeDataUrl) {
-            setQrCodeUrl(data.qrCodeDataUrl);
+          } else if (data.status === 'AWAITING_SCAN') {
+            if (data.qrCodeDataUrl) setQrCodeUrl(data.qrCodeDataUrl);
+            if (data.pairingCode) setPairingCode(data.pairingCode);
           }
         }
       } catch (err) {
@@ -188,6 +200,7 @@ export default function MarketingView({
   const handleQrScan = async () => {
     setQrLinkStatus('scanning');
     setQrCodeUrl(null);
+    setPairingCode(null);
     try {
       const res = await fetch(`https://us-central1-gha-management.cloudfunctions.net/getQrCode?guesthouseId=${guesthouseId}`);
       if (res.ok) {
@@ -204,6 +217,33 @@ export default function MarketingView({
     }
   };
 
+  const handlePhoneOtpPair = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pairingPhone.trim()) return;
+    setQrLinkStatus('scanning');
+    setQrCodeUrl(null);
+    setPairingCode(null);
+    setIsGeneratingCode(true);
+
+    try {
+      const res = await fetch(`https://us-central1-gha-management.cloudfunctions.net/getPairingCode?guesthouseId=${guesthouseId}&phone=${encodeURIComponent(pairingPhone.trim())}`);
+      if (res.ok) {
+        const data = await res.json() as any;
+        setPairingCode(data.pairingCode);
+      } else {
+        const data = await res.json() as any;
+        setQrLinkStatus('idle');
+        alert(data.error || 'Failed to retrieve OTP pairing code. Try again.');
+      }
+    } catch (err) {
+      console.error(err);
+      setQrLinkStatus('idle');
+      alert('Connection error generating OTP pairing code.');
+    } finally {
+      setIsGeneratingCode(false);
+    }
+  };
+
   const handleCopyLink = () => {
     navigator.clipboard.writeText(QR_SESSION_URL).catch(() => {});
     setCopied(true);
@@ -213,6 +253,7 @@ export default function MarketingView({
   const handleQrReset = () => {
     setQrLinkStatus('idle');
     setQrCodeUrl(null);
+    setPairingCode(null);
   };
 
   // ── Loadshedding / Utility Alert State ───────────────────────────────────────
@@ -1199,152 +1240,231 @@ export default function MarketingView({
               </div>
             </div>
 
-            <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8" id="qr-body">
-              {/* Left: QR Panel */}
-              <div className="flex flex-col items-center gap-6" id="qr-left">
-                <div className="relative" id="qr-code-wrapper">
-                  {/* Animated ring when scanning */}
-                  {qrLinkStatus === 'scanning' && (
-                    <div className="absolute -inset-3 rounded-2xl border-2 border-emerald-400 animate-ping opacity-30" />
-                  )}
-                  <div className={`p-4 rounded-2xl border-2 transition-all ${
-                    qrLinkStatus === 'linked'
-                      ? 'border-emerald-400 bg-emerald-50 shadow-lg shadow-emerald-100'
-                      : qrLinkStatus === 'scanning'
-                      ? 'border-emerald-300 bg-white shadow-xl'
-                      : 'border-gray-100 bg-white shadow-sm'
-                  }`} id="qr-display-box">
-                    {qrLinkStatus === 'linked' ? (
-                      <div className="w-44 h-44 flex flex-col items-center justify-center gap-3">
-                        <div className="p-4 bg-emerald-100 rounded-full">
-                          <CheckCheck className="h-10 w-10 text-emerald-600" />
-                        </div>
-                        <p className="text-sm font-bold text-emerald-700">Device Linked!</p>
-                        <p className="text-[10px] text-emerald-600 text-center">Your WhatsApp Business number is now active.</p>
-                      </div>
-                    ) : (
-                      <div className={`w-44 h-44 flex items-center justify-center transition-all ${qrLinkStatus === 'scanning' ? 'opacity-60' : 'opacity-100'}`}>
-                        {qrCodeUrl ? (
-                          <img src={qrCodeUrl} alt="WhatsApp Web QR Code" className="w-40 h-40 animate-fade-in" />
-                        ) : (
-                          <QRCodeSVG size={176} />
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {qrLinkStatus === 'scanning' && (
-                    <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-white/60 backdrop-blur-[1px]">
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="h-8 w-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-                        <span className="text-[10px] font-bold text-emerald-700">Scanning...</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Status Badge */}
-                <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold border ${
-                  qrLinkStatus === 'linked'
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : qrLinkStatus === 'scanning'
-                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : 'bg-gray-50 text-gray-500 border-gray-200'
-                }`} id="qr-status-badge">
-                  {qrLinkStatus === 'linked' ? (
-                    <><Wifi className="h-3.5 w-3.5" /> Business Number Active</>
-                  ) : qrLinkStatus === 'scanning' ? (
-                    <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Awaiting scan on your phone...</>
-                  ) : (
-                    <><WifiOff className="h-3.5 w-3.5" /> Not Linked Yet</>
-                  )}
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex flex-col gap-2 w-full max-w-xs" id="qr-actions">
-                  {qrLinkStatus === 'idle' && (
-                    <button
-                      onClick={handleQrScan}
-                      className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm shadow-emerald-200 transition-all"
-                      id="btn-connect-qr"
-                    >
-                      <QrCode className="h-4 w-4" />
-                      Connect via QR Code
-                    </button>
-                  )}
-
-                  {qrLinkStatus === 'scanning' && (
-                    <button
-                      onClick={handleQrReset}
-                      className="w-full py-2.5 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl text-xs font-semibold transition-all"
-                      id="btn-cancel-qr"
-                    >
-                      Cancel
-                    </button>
-                  )}
-
-                  {qrLinkStatus === 'linked' && (
-                    <button
-                      onClick={handleQrReset}
-                      className="w-full py-2.5 border border-red-100 text-red-500 hover:bg-red-50 rounded-xl text-xs font-semibold transition-all"
-                      id="btn-unlink-qr"
-                    >
-                      Unlink Device
-                    </button>
-                  )}
-
-                  <button
-                    onClick={handleCopyLink}
-                    className="w-full py-2.5 border border-gray-100 hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all"
-                    id="btn-copy-qr-link"
-                  >
-                    {copied ? <><CheckCheck className="h-4 w-4 text-emerald-500" /> Copied!</> : <><Copy className="h-4 w-4" /> Copy Session Link</>}
-                  </button>
-                </div>
+            <div className="p-6" id="qr-body">
+              {/* Method Selector */}
+              <div className="flex border-b border-gray-100 mb-6 gap-6" id="pairing-method-tabs">
+                <button
+                  type="button"
+                  onClick={() => { handleQrReset(); setPairingMethod('otp'); }}
+                  className={`pb-2.5 text-xs font-bold border-b-2 transition-all ${
+                    pairingMethod === 'otp' ? 'border-emerald-600 text-emerald-700 font-extrabold' : 'border-transparent text-gray-400 hover:text-gray-600'
+                  }`}
+                  id="tab-pair-otp"
+                >
+                  📟 Link via Phone Code (OTP)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { handleQrReset(); setPairingMethod('qr'); }}
+                  className={`pb-2.5 text-xs font-bold border-b-2 transition-all ${
+                    pairingMethod === 'qr' ? 'border-emerald-600 text-emerald-700 font-extrabold' : 'border-transparent text-gray-400 hover:text-gray-600'
+                  }`}
+                  id="tab-pair-qr"
+                >
+                  📷 Link via QR Code Scan
+                </button>
               </div>
 
-              {/* Right: Instructions */}
-              <div className="space-y-6" id="qr-right">
-                <div>
-                  <h5 className="font-bold text-gray-900 text-sm mb-3">How to Link Your Number</h5>
-                  <ol className="space-y-4" id="qr-steps">
-                    {[
-                      { step: '1', icon: '📱', title: 'Open WhatsApp on your phone', desc: 'Use the business number you want guests to receive messages from.' },
-                      { step: '2', icon: '⚙️', title: 'Go to Linked Devices', desc: 'Tap the three dots menu (Android) or Settings (iPhone) → Linked Devices.' },
-                      { step: '3', icon: '🔗', title: 'Tap "Link a Device"', desc: 'Point your phone camera at the QR code displayed on the left.' },
-                      { step: '4', icon: '✅', title: 'You\'re connected!', desc: 'Once linked, all WhatsApp campaigns and alerts will send from your business number.' },
-                    ].map(({ step, icon, title, desc }) => (
-                      <li key={step} className="flex gap-4 items-start" id={`qr-step-${step}`}>
-                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-xs font-black">
-                          {step}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Left: Connection State Box */}
+                <div className="flex flex-col items-center justify-center border border-dashed border-gray-150 bg-gray-50/20 p-6 rounded-2xl min-h-[300px]" id="qr-left">
+                  {qrLinkStatus === 'linked' ? (
+                    <div className="w-full flex flex-col items-center justify-center gap-3 py-6" id="linked-state-box">
+                      <div className="p-4 bg-emerald-100 rounded-full">
+                        <CheckCheck className="h-10 w-10 text-emerald-600 animate-bounce" />
+                      </div>
+                      <h5 className="text-sm font-bold text-emerald-700">Device Successfully Linked!</h5>
+                      <p className="text-[11px] text-emerald-600 text-center max-w-xs">
+                        Your personal WhatsApp number is now fully connected. All campaign blasts, review triggers, and utility warnings will deliver from this device.
+                      </p>
+                      <button
+                        onClick={handleQrReset}
+                        className="mt-4 px-5 py-2 border border-red-200 text-red-500 hover:bg-red-50 rounded-xl text-xs font-semibold transition-colors"
+                        id="btn-unlink-phone"
+                      >
+                        Disconnect Phone
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* OTP PAIRING FLOW */}
+                      {pairingMethod === 'otp' && (
+                        <div className="w-full flex flex-col items-center justify-center gap-6" id="otp-flow">
+                          {qrLinkStatus === 'idle' && (
+                            <form onSubmit={handlePhoneOtpPair} className="space-y-4 w-full max-w-xs">
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">PHONE NUMBER (WITH COUNTRY CODE)</label>
+                                <input
+                                  type="tel"
+                                  required
+                                  placeholder="e.g. +26771234567"
+                                  value={pairingPhone}
+                                  onChange={(e) => setPairingPhone(e.target.value)}
+                                  className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none font-mono bg-white"
+                                  id="otp-phone-input"
+                                />
+                                <p className="text-[9px] text-gray-400">Include country prefix. Do not add spaces or special characters.</p>
+                              </div>
+                              <button
+                                type="submit"
+                                disabled={isGeneratingCode || !pairingPhone.trim()}
+                                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all"
+                                id="btn-request-otp"
+                              >
+                                {isGeneratingCode ? (
+                                  <>
+                                    <RefreshCw className="h-4 w-4 animate-spin" />
+                                    Generating Code...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Key className="h-4 w-4" />
+                                    Get 8-Digit Pairing Code
+                                  </>
+                                )}
+                              </button>
+                            </form>
+                          )}
+
+                          {qrLinkStatus === 'scanning' && (
+                            <div className="flex flex-col items-center gap-6 text-center w-full max-w-xs animate-fade-in">
+                              {pairingCode ? (
+                                <>
+                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">ENTER THIS CODE ON YOUR PHONE</span>
+                                  <div className="flex gap-2 justify-center items-center font-mono">
+                                    {pairingCode.split('').map((char, i) => (
+                                      <span key={i} className="w-8 h-10 border border-gray-200 bg-white rounded-lg flex items-center justify-center font-bold text-lg text-emerald-700 shadow-sm">
+                                        {char}
+                                      </span>
+                                    ))}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 justify-center mt-2">
+                                    <RefreshCw className="h-3 w-3 text-emerald-500 animate-spin" />
+                                    <span className="text-[10px] text-emerald-600 font-semibold">Waiting for phone auth...</span>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="space-y-2 py-4">
+                                  <div className="h-8 w-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                                  <p className="text-xs font-semibold text-gray-600 animate-pulse">Requesting WhatsApp handshake...</p>
+                                  <p className="text-[9px] text-gray-400">Firing Cloud Functions session container</p>
+                                </div>
+                              )}
+
+                              <button
+                                onClick={handleQrReset}
+                                className="px-4 py-2 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl text-xs font-semibold mt-4 transition-colors"
+                              >
+                                Cancel Setup
+                              </button>
+                            </div>
+                          )}
                         </div>
-                        <div>
-                          <p className="text-xs font-bold text-gray-800">{icon} {title}</p>
-                          <p className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">{desc}</p>
+                      )}
+
+                      {/* QR SCANNED FLOW */}
+                      {pairingMethod === 'qr' && (
+                        <div className="w-full flex flex-col items-center justify-center gap-6" id="qr-flow">
+                          <div className={`p-4 rounded-2xl border-2 transition-all ${
+                            qrLinkStatus === 'scanning' ? 'border-emerald-300 bg-white shadow-xl' : 'border-gray-150 bg-gray-50/50 shadow-sm'
+                          }`} id="qr-display-box">
+                            {qrLinkStatus === 'scanning' && qrCodeUrl ? (
+                              <img src={qrCodeUrl} alt="WhatsApp Web QR Code" className="w-40 h-40 animate-fade-in" />
+                            ) : qrLinkStatus === 'scanning' ? (
+                              <div className="w-44 h-44 flex flex-col items-center justify-center gap-2 text-center p-2">
+                                <div className="h-6 w-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                                <p className="text-[10px] font-bold text-gray-500 animate-pulse">Spawning socket...</p>
+                                <p className="text-[8px] text-gray-400">Initiating handshakes on GCP</p>
+                              </div>
+                            ) : (
+                              <div className="w-44 h-44 flex flex-col items-center justify-center gap-2 text-center p-4">
+                                <Smartphone className="h-8 w-8 text-gray-300" />
+                                <p className="text-[10px] font-bold text-gray-400">No Active Session</p>
+                                <p className="text-[8px] text-gray-400 leading-normal">Click below to generate WhatsApp QR image</p>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex flex-col gap-2 w-full max-w-xs">
+                            {qrLinkStatus === 'idle' && (
+                              <button
+                                onClick={handleQrScan}
+                                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all"
+                              >
+                                <QrCode className="h-4 w-4" />
+                                Connect via QR Code
+                              </button>
+                            )}
+
+                            {qrLinkStatus === 'scanning' && (
+                              <button
+                                onClick={handleQrReset}
+                                className="w-full py-2.5 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl text-xs font-semibold transition-all"
+                              >
+                                Cancel Scan
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </li>
-                    ))}
-                  </ol>
+                      )}
+                    </>
+                  )}
                 </div>
 
-                {/* Info Box */}
-                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-2" id="qr-info-box">
-                  <p className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider">Why use QR linking?</p>
-                  <ul className="text-[11px] text-indigo-800 space-y-1 leading-relaxed">
-                    <li>• Messages come from your real, trusted business phone number</li>
-                    <li>• Guests recognise your number — higher open rates</li>
-                    <li>• No technical Meta developer account setup required</li>
-                    <li>• Works with any existing WhatsApp Business account</li>
-                  </ul>
-                </div>
+                {/* Right: Step-by-Step Instructions */}
+                <div className="space-y-6" id="qr-right">
+                  <div>
+                    <h5 className="font-bold text-gray-900 text-sm mb-3">
+                      {pairingMethod === 'otp' ? '📟 Instructions: Link with Phone Code' : '📷 Instructions: Link with QR Code'}
+                    </h5>
+                    <ol className="space-y-4" id="qr-steps">
+                      {pairingMethod === 'otp' ? (
+                        [
+                          { step: '1', icon: '📱', title: 'Open WhatsApp', desc: 'Open WhatsApp Business on your phone.' },
+                          { step: '2', icon: '⚙️', title: 'Navigate to Linked Devices', desc: 'Tap settings or three-dots menu -> Linked Devices -> Link a Device.' },
+                          { step: '3', icon: '📟', title: 'Select Phone Number Link', desc: 'Instead of scanning, tap "Link with phone number instead" at the bottom of the scan screen.' },
+                          { step: '4', icon: '✅', title: 'Input Code', desc: 'Enter your phone number on WhatsApp, then input the 8-digit code displayed on the left.' }
+                        ].map(({ step, icon, title, desc }) => (
+                          <li key={step} className="flex gap-4 items-start" id={`otp-step-${step}`}>
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-xs font-black">
+                              {step}
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-gray-800">{icon} {title}</p>
+                              <p className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">{desc}</p>
+                            </div>
+                          </li>
+                        ))
+                      ) : (
+                        [
+                          { step: '1', icon: '📱', title: 'Open WhatsApp on your phone', desc: 'Make sure your phone is active and connected to the internet.' },
+                          { step: '2', icon: '⚙️', title: 'Go to Linked Devices', desc: 'Tap menu/settings -> Linked Devices -> Link a Device.' },
+                          { step: '3', icon: '📷', title: 'Scan QR Image', desc: 'Point your camera at the QR code displayed on the screen.' },
+                          { step: '4', icon: '✅', title: 'Wait for Sync', desc: 'Once scanned, the browser will automatically pair and configure your credentials.' }
+                        ].map(({ step, icon, title, desc }) => (
+                          <li key={step} className="flex gap-4 items-start" id={`qr-step-${step}`}>
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-xs font-black">
+                              {step}
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-gray-800">{icon} {title}</p>
+                              <p className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">{desc}</p>
+                            </div>
+                          </li>
+                        ))
+                      )}
+                    </ol>
+                  </div>
 
-                {/* Technical note */}
-                <div className="bg-amber-50 border border-amber-100 rounded-xl p-4" id="qr-tech-note">
-                  <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1">Developer Note</p>
-                  <p className="text-[11px] text-amber-800 leading-relaxed">
-                    Full QR session bridging requires a Node.js server running <code className="font-mono bg-amber-100 px-1 rounded">whatsapp-web.js</code> (Baileys library). 
-                    This UI is fully wired and ready — contact support to activate the live session server for your subscription plan.
-                  </p>
+                  {/* Info Box */}
+                  <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 space-y-2" id="qr-info-box">
+                    <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Pairing Code Benefits</p>
+                    <ul className="text-[11px] text-emerald-700 space-y-1 leading-relaxed">
+                      <li>• **Zero image rendering:** Faster loading speeds and zero scanner mismatch.</li>
+                      <li>• **Easy Remote Pairing:** Link numbers from client phones without needing them in the same room.</li>
+                      <li>• **Highly Stable:** WhatsApp Web OTP protocol is extremely resilient.</li>
+                    </ul>
+                  </div>
                 </div>
               </div>
             </div>
