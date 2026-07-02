@@ -422,9 +422,50 @@ app.put('/api/customers/:id', async (c) => {
   const id = c.req.param('id');
   try {
     const body = await c.req.json();
-    const updated = await c.var.prisma.customer.update({ where: { id }, data: body });
+    const { name, email, phone, customerCountry, optInPromo, gender, ageGroup, groupStyle } = body;
+
+    // Load current customer profile to get their guesthouseId and current phone
+    const currentCustomer = await c.var.prisma.customer.findUnique({ where: { id } });
+    if (!currentCustomer) {
+      return c.json({ error: 'Customer profile not found' }, 404);
+    }
+
+    const guesthouseId = currentCustomer.guesthouseId;
+    const cleanPhone = phone ? phone.trim() : currentCustomer.phone;
+
+    // If the phone is being changed, check for duplicates in this guesthouse
+    if (phone && cleanPhone !== currentCustomer.phone) {
+      const duplicate = await c.var.prisma.customer.findFirst({
+        where: {
+          guesthouseId,
+          phone: cleanPhone,
+          NOT: { id },
+        },
+      });
+
+      if (duplicate) {
+        return c.json({ error: `A profile with phone number "${cleanPhone}" already exists in this registry.` }, 400);
+      }
+    }
+
+    const updated = await c.var.prisma.customer.update({
+      where: { id },
+      data: {
+        ...(name ? { name } : {}),
+        email,
+        phone: cleanPhone,
+        customerCountry: customerCountry || 'Botswana (local)',
+        optInPromo: typeof optInPromo === 'boolean' ? optInPromo : undefined,
+        gender,
+        ageGroup,
+        groupStyle,
+      },
+    });
     return c.json(updated);
   } catch (err: any) {
+    if (err.code === 'P2002') {
+      return c.json({ error: 'Another customer with this phone number is already registered under this guesthouse.' }, 400);
+    }
     return c.json({ error: err.message }, 500);
   }
 });

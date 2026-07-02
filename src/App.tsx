@@ -17,7 +17,10 @@ import {
   Database,
   Building,
   Settings,
-  Megaphone
+  Megaphone,
+  AlertCircle,
+  X,
+  Info
 } from 'lucide-react';
 
 import { User, Guesthouse, Booking, Customer, MessageLog, Campaign } from './types';
@@ -52,6 +55,78 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+
+  // Global Toast / popup notification state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message, type });
+  };
+
+  useEffect(() => {
+    // Expose globally so child views can call window.showToast("Msg", "success") directly
+    (window as any).showToast = showToast;
+
+    // Override window.alert to automatically convert all ugly browser alerts to premium toasts
+    const originalAlert = window.alert;
+    window.alert = (message: string) => {
+      if (!message) return;
+      const lower = message.toLowerCase();
+      const isSuccess = lower.includes('success') || 
+                        lower.includes('successfully') || 
+                        lower.includes('saved') || 
+                        lower.includes('updated') || 
+                        lower.includes('created') || 
+                        lower.includes('completed') || 
+                        lower.includes('deleted') || 
+                        lower.includes('sent');
+      showToast(message, isSuccess ? 'success' : 'error');
+    };
+
+    // Override window.fetch to automatically trigger success toasts for mutations!
+    const originalFetch = window.fetch;
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const response = await originalFetch(input, init);
+      
+      const method = (init?.method || 'GET').toUpperCase();
+      const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+
+      // Only show success toasts for successful POST, PUT, DELETE operations on the REST API
+      if (response.ok && ['POST', 'PUT', 'DELETE'].includes(method) && urlStr.includes('/api/')) {
+        const isExcluded = urlStr.includes('/api/webhooks/') || urlStr.includes('/api/super/') || urlStr.includes('/api/auth/login');
+        
+        if (!isExcluded) {
+          let actionWord = 'updated';
+          if (method === 'POST') actionWord = 'created';
+          if (method === 'DELETE') actionWord = 'deleted';
+
+          let entity = 'Record';
+          if (urlStr.includes('/api/customers')) entity = 'Customer registry profile';
+          else if (urlStr.includes('/api/bookings')) entity = 'Booking record';
+          else if (urlStr.includes('/api/marketing/whatsapp-settings') || urlStr.includes('/api/guesthouse')) entity = 'Guesthouse settings';
+          else if (urlStr.includes('/api/employees')) entity = 'Employee profile';
+          else if (urlStr.includes('/api/marketing/whatsapp-send')) entity = 'WhatsApp message';
+          else if (urlStr.includes('/api/marketing/campaigns')) entity = 'Campaign broadcast';
+
+          showToast(`${entity} ${actionWord} successfully!`, 'success');
+        }
+      }
+
+      return response;
+    };
+
+    return () => {
+      window.alert = originalAlert;
+      window.fetch = originalFetch;
+    };
+  }, []);
+
+  // Auto-dismiss notification toast after 4 seconds
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   // Sync core tenant metrics from full-stack server
   const fetchTenantMetrics = async (targetGuesthouseId: string) => {
@@ -212,10 +287,55 @@ export default function App() {
     setActiveTab('marketing');
   };
 
+  const renderToast = () => (
+    <AnimatePresence>
+      {toast && (
+        <motion.div
+          initial={{ opacity: 0, y: -20, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -20, scale: 0.95 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+          className="fixed top-4 right-4 z-[9999] max-w-sm w-full bg-white/90 backdrop-blur-md rounded-2xl shadow-xl border border-gray-100 p-4 flex gap-3 pointer-events-auto"
+          id="toast-notification"
+        >
+          <div className="flex-shrink-0">
+            {toast.type === 'success' ? (
+              <div className="p-2 bg-emerald-50 rounded-xl text-emerald-600 border border-emerald-100">
+                <CheckCircle2 className="h-5 w-5" />
+              </div>
+            ) : toast.type === 'error' ? (
+              <div className="p-2 bg-rose-50 rounded-xl text-rose-600 border border-rose-100">
+                <AlertCircle className="h-5 w-5" />
+              </div>
+            ) : (
+              <div className="p-2 bg-blue-50 rounded-xl text-blue-600 border border-blue-100">
+                <Info className="h-5 w-5" />
+              </div>
+            )}
+          </div>
+          <div className="flex-grow min-w-0 pt-0.5">
+            <p className="text-xs font-bold text-gray-900 uppercase">
+              {toast.type === 'success' ? 'Action Completed' : toast.type === 'error' ? 'Something Went Wrong' : 'Notification'}
+            </p>
+            <p className="text-xs text-gray-500 font-medium mt-0.5 leading-relaxed break-words">{toast.message}</p>
+          </div>
+          <button
+            onClick={() => setToast(null)}
+            className="flex-shrink-0 self-start p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+            id="toast-close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   // Render Login state first
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans antialiased" id="login-layout">
+      <>
+        <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans antialiased" id="login-layout">
         <div className="sm:mx-auto sm:w-full sm:max-w-md space-y-3 text-center" id="login-header-block">
           <div className="inline-flex p-3 bg-gray-900 rounded-2xl text-white shadow-md mx-auto" id="logo-icon-bg">
             <Bed className="h-6 w-6" />
@@ -319,11 +439,14 @@ export default function App() {
           </div>
         </div>
       </div>
+      {renderToast()}
+      </>
     );
   }
 
   return (
-    <div className="h-screen bg-gray-50 flex font-sans text-gray-800 antialiased overflow-hidden" id="dashboard-container">
+    <>
+      <div className="h-screen bg-gray-50 flex font-sans text-gray-800 antialiased overflow-hidden" id="dashboard-container">
       {/* 1. Permanent Left Sidebar */}
       <aside className="w-64 bg-gray-950 text-white flex flex-col justify-between shrink-0 overflow-hidden" id="main-sidebar">
         <div className="p-6 space-y-6" id="sidebar-top">
@@ -607,6 +730,8 @@ export default function App() {
           </AnimatePresence>
         </div>
       </main>
-    </div>
+      </div>
+      {renderToast()}
+    </>
   );
 }
