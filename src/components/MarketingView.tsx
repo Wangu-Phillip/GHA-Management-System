@@ -1495,7 +1495,7 @@ export default function MarketingView({
               <tbody className="divide-y divide-gray-50" id="logs-table-body">
                 {logs.length > 0 ? (
                   logs.slice().reverse().map((l) => (
-                    <tr key={l.id} className="hover:bg-gray-50/50" id={`log-${l.id}`}>
+                    <tr key={l.id} className={`hover:bg-gray-50/50 ${l.direction === 'INBOUND' ? 'bg-emerald-50/30' : ''}`} id={`log-${l.id}`}>
                       <td className="p-3 text-gray-400 text-[10px]">{new Date(l.createdAt).toLocaleTimeString()} - {new Date(l.createdAt).toLocaleDateString()}</td>
                       <td className="p-3 font-mono font-medium text-gray-800">{l.phone}</td>
                       <td className="p-3">
@@ -1508,13 +1508,27 @@ export default function MarketingView({
                         </span>
                       </td>
                       <td className="p-3 text-gray-600 font-medium max-w-sm truncate" title={l.content}>{l.content}</td>
-                      <td className="p-3 font-semibold text-gray-500">{l.direction}</td>
                       <td className="p-3">
-                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                          l.status === 'DELIVERED' || l.status === 'READ' ? 'bg-green-50 text-green-700' :
-                          l.status === 'FAILED' ? 'bg-red-50 text-red-700' :
-                          'bg-amber-50 text-amber-700'
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold ${
+                          l.direction === 'INBOUND'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-blue-50 text-blue-700 border border-blue-100'
                         }`}>
+                          {l.direction === 'INBOUND' ? '↩ Reply' : '↗ Sent'}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold ${
+                          l.status === 'READ' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' :
+                          l.status === 'DELIVERED' ? 'bg-green-50 text-green-700 border border-green-100' :
+                          l.status === 'SENT' ? 'bg-sky-50 text-sky-700 border border-sky-100' :
+                          l.status === 'FAILED' ? 'bg-red-50 text-red-700 border border-red-100' :
+                          'bg-amber-50 text-amber-700 border border-amber-100'
+                        }`}>
+                          {l.status === 'READ' && '👁 '}
+                          {l.status === 'DELIVERED' && '✓✓ '}
+                          {l.status === 'SENT' && '✓ '}
+                          {l.status === 'FAILED' && '✗ '}
                           {l.status}
                         </span>
                       </td>

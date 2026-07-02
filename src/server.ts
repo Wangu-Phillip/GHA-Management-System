@@ -22,6 +22,7 @@ import { getOrGenerateAdvisorAdvice } from './services/facebook_ai';
 export type Bindings = {
   DB: D1Database;
   GEMINI_API_KEY?: string;
+  WHATSAPP_VERIFY_TOKEN?: string;
   ASSETS?: Fetcher;
 };
 
@@ -548,6 +549,198 @@ app.post('/api/marketing/whatsapp-automations/trigger-review', async (c) => {
     });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
+  }
+});
+
+// ==========================================
+// WhatsApp Webhook — Meta Cloud API
+// ==========================================
+
+// GET /api/webhooks/whatsapp — Meta challenge verification handshake
+app.get('/api/webhooks/whatsapp', (c) => {
+  const mode = c.req.query('hub.mode');
+  const token = c.req.query('hub.verify_token');
+  const challenge = c.req.query('hub.challenge');
+  const verifyToken = c.env?.WHATSAPP_VERIFY_TOKEN || 'gha-whatsapp-verify-2026';
+
+  if (mode === 'subscribe' && token === verifyToken) {
+    return new Response(challenge || '', { status: 200 });
+  }
+  return c.json({ error: 'Verification token mismatch' }, 403);
+});
+
+// POST /api/webhooks/whatsapp — Incoming status updates & inbound messages
+app.post('/api/webhooks/whatsapp', async (c) => {
+  try {
+    // Set up DB access manually (webhook is outside /api/* middleware auth)
+    if (!c.env?.DB) return c.json({ error: 'DB not configured' }, 500);
+    const adapter = new PrismaD1(c.env.DB);
+    const prisma = new PrismaClient({ adapter });
+
+    const body: any = await c.req.json();
+
+    if (body.object !== 'whatsapp_business_account') {
+      return c.json({ status: 'ignored' }, 200);
+    }
+
+    const entries = body.entry || [];
+    for (const entry of entries) {
+      const changes = entry.changes || [];
+      for (const change of changes) {
+        const value = change.value || {};
+        const phoneNumberId: string = value.metadata?.phone_number_id || '';
+
+        // ── 1. Status update events (sent / delivered / read / failed) ─────────
+        const statuses: any[] = value.statuses || [];
+        for (const st of statuses) {
+          const wamid: string = st.id || '';
+          const newStatus: string = (st.status || '').toUpperCase(); // SENT | DELIVERED | READ | FAILED
+          const recipientPhone: string = (st.recipient_id || '').replace(/\D/g, '');
+
+          if (!newStatus) continue;
+
+          // Step 1: try to find by exact wamid
+          let matchingLog: any = null;
+          if (wamid) {
+            matchingLog = await (prisma as any).messageLog.findFirst({
+              where: { wamid, direction: 'OUTBOUND' },
+              orderBy: { createdAt: 'desc' },
+            });
+          }
+
+          // Step 2: fallback — find most recent OUTBOUND log to this phone number
+          if (!matchingLog && recipientPhone) {
+            // Get all recent outbound logs and match by stripping non-digits
+            const recentLogs: any[] = await (prisma as any).messageLog.findMany({
+              where: { direction: 'OUTBOUND' },
+              orderBy: { createdAt: 'desc' },
+              take: 200,
+            });
+            matchingLog = recentLogs.find(
+              (l: any) => l.phone.replace(/\D/g, '').endsWith(recipientPhone.slice(-9))
+            ) || null;
+          }
+
+          if (matchingLog) {
+            const statusPriority: Record<string, number> = {
+              PENDING: 0, SENT: 1, DELIVERED: 2, READ: 3, FAILED: -1,
+            };
+            const currentPriority = statusPriority[matchingLog.status] ?? 0;
+            const incomingPriority = statusPriority[newStatus] ?? 0;
+            // Only upgrade status (never downgrade READ → SENT, etc.)
+            if (incomingPriority > currentPriority || newStatus === 'FAILED') {
+              await (prisma as any).messageLog.update({
+                where: { id: matchingLog.id },
+                data: { status: newStatus, ...(wamid ? { wamid } : {}) },
+              });
+            }
+          }
+        }
+
+        // ── 2. Inbound customer message events ────────────────────────────────
+        const messages: any[] = value.messages || [];
+        const contacts: any[] = value.contacts || [];
+
+        for (const msg of messages) {
+          if (msg.type !== 'text') continue;
+
+          const fromPhone: string = msg.from || '';
+          const msgText: string = msg.text?.body || '';
+          const wamid: string = msg.id || '';
+          const senderName: string =
+            contacts.find((c: any) => c.wa_id === fromPhone)?.profile?.name || 'Customer';
+
+          // Look up guesthouseId from any outbound message log to this phone
+          const outboundRef = await (prisma as any).messageLog.findFirst({
+            where: {
+              phone: { contains: fromPhone.slice(-8) },
+              direction: 'OUTBOUND',
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          const guesthouseId: string = outboundRef?.guesthouseId || 'tenant-1';
+
+          // Log the inbound reply
+          await (prisma as any).messageLog.create({
+            data: {
+              guesthouseId,
+              phone: fromPhone,
+              wamid,
+              direction: 'INBOUND',
+              messageType: 'GENERAL',
+              content: msgText,
+              status: 'READ',
+            },
+          });
+
+          // ── 3. Showed Up / Conversion detection ────────────────────────────
+          // Detect positive intent keywords in the reply
+          const positiveKeywords = [
+            'book', 'booking', 'reserve', 'reservation', 'yes', 'interested',
+            'confirm', 'coming', 'sounds great', 'perfect', 'count me in',
+            'great offer', 'we will come', 'see you', 'noted', 'i will',
+          ];
+          const lowerMsg = msgText.toLowerCase();
+          const isPositive = positiveKeywords.some((kw) => lowerMsg.includes(kw));
+
+          if (isPositive) {
+            // Find or create the customer record
+            let customer = await (prisma as any).customer.findFirst({
+              where: { guesthouseId, phone: { contains: fromPhone.slice(-8) } },
+            });
+            if (!customer) {
+              customer = await (prisma as any).customer.create({
+                data: {
+                  guesthouseId,
+                  name: senderName,
+                  phone: fromPhone,
+                  email: '',
+                  optInPromo: true,
+                },
+              });
+            }
+
+            // Check if booking already exists for this phone in the near-future
+            const upcomingBooking = await (prisma as any).booking.findFirst({
+              where: {
+                guesthouseId,
+                customerPhone: { contains: fromPhone.slice(-8) },
+                checkIn: { gte: new Date() },
+              },
+            });
+
+            // Create a CONFIRMED follow-up booking if none found
+            if (!upcomingBooking) {
+              const checkIn = new Date();
+              checkIn.setDate(checkIn.getDate() + 3);
+              const checkOut = new Date(checkIn);
+              checkOut.setDate(checkOut.getDate() + 2);
+              await (prisma as any).booking.create({
+                data: {
+                  guesthouseId,
+                  customerName: senderName,
+                  customerEmail: customer.email || 'guest@example.com',
+                  customerPhone: fromPhone,
+                  roomName: 'TBC — Awaiting Guest Confirmation',
+                  checkIn,
+                  checkOut,
+                  status: 'CONFIRMED',
+                  totalAmount: 0,
+                  notes: `Auto-created from WhatsApp inbound reply: "${msgText.substring(0, 120)}"`,
+                },
+              });
+            }
+          }
+        }
+      }
+    }
+
+    return c.json({ status: 'ok' }, 200);
+  } catch (err: any) {
+    console.error('WhatsApp webhook processing error:', err.message);
+    // Always return 200 to prevent Meta from disabling the webhook
+    return c.json({ status: 'ok' }, 200);
   }
 });
 

@@ -86,6 +86,7 @@ export interface MessageLogData {
   bookingId: string | null;
   campaignId: string | null;
   phone: string;
+  wamid: string | null;
   direction: string;
   messageType: string;
   content: string;

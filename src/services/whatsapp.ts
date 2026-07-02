@@ -63,6 +63,7 @@ export async function sendWhatsAppMessage(
             bookingId,
             campaignId,
             phone,
+            wamid: data.messageId || null,
             direction: 'OUTBOUND',
             messageType,
             content,
@@ -139,16 +140,17 @@ export async function sendWhatsAppMessage(
             bookingId,
             campaignId,
             phone,
+            wamid: data.messages?.[0]?.id || null,
             direction: 'OUTBOUND',
             messageType,
             content,
-            status: 'DELIVERED',
+            status: 'SENT',
           },
         });
         return {
           success: true,
           messageId: data.messages?.[0]?.id || messageId,
-          status: 'DELIVERED',
+          status: 'SENT',
           contentSent: content,
         };
       }

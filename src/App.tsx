@@ -72,6 +72,8 @@ export default function App() {
     }
   };
 
+  // Callable refresh used by child views (MarketingView, CustomersView, etc.) — defined below near logout handler
+
   // Sync health endpoint to identify database connection state
   const checkPlatformHealth = async () => {
     try {
@@ -94,6 +96,15 @@ export default function App() {
     if (user && user.guesthouseId) {
       fetchTenantMetrics(user.guesthouseId);
     }
+  }, [user]);
+
+  // Auto-poll every 10 seconds to pick up live webhook updates (read, reply, conversions)
+  useEffect(() => {
+    if (!user?.guesthouseId) return;
+    const interval = setInterval(() => {
+      fetchTenantMetrics(user.guesthouseId);
+    }, 10000);
+    return () => clearInterval(interval);
   }, [user]);
 
   // Handle Login submission

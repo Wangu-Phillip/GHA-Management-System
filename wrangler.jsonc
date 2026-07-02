@@ -24,4 +24,5 @@
 	}
 	// Secrets (set via `wrangler secret put`):
 	//   GEMINI_API_KEY
+	//   WHATSAPP_VERIFY_TOKEN  (e.g. gha-whatsapp-verify-2026)
 }

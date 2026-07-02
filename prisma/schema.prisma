@@ -62,6 +62,7 @@ model Booking {
   checkOut            DateTime
   status              String       @default("CONFIRMED")
   totalAmount         Float
+  notes               String?
   reviewCollected     Boolean      @default(false)
   reviewMessageStatus String       @default("PENDING")
   createdAt           DateTime     @default(now())
@@ -111,6 +112,7 @@ model MessageLog {
   campaignId   String?
   campaign     Campaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   phone        String
+  wamid        String?
   direction    String
   messageType  String
   content      String

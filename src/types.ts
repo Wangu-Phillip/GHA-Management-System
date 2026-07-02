@@ -71,6 +71,7 @@ export interface MessageLog {
   bookingId?: string;
   campaignId?: string;
   phone: string;
+  wamid?: string;
   direction: 'OUTBOUND' | 'INBOUND';
   messageType: 'PROMO' | 'REVIEW_REQUEST' | 'GENERAL';
   content: string;
