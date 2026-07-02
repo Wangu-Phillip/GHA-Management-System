@@ -18,6 +18,7 @@ import {
   AlertTriangle 
 } from 'lucide-react';
 import { Guesthouse, User as UserType, Role } from '../types';
+import ConfirmationModal from './ConfirmationModal';
 
 interface SettingsViewProps {
   guesthouse: Guesthouse;
@@ -69,30 +70,50 @@ export default function SettingsView({
   // Clear demo/dummy data state
   const [clearingDemo, setClearingDemo] = useState(false);
 
-  const handleClearDemoData = async () => {
-    if (!confirm('Are you sure you want to clear all dummy/seeded bookings, customers, campaigns, message logs, and mock Facebook campaign history from this workspace? Real entries will be preserved.')) {
-      return;
-    }
-    setClearingDemo(true);
-    try {
-      const response = await fetch('/api/marketing/clear-dummy-data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guesthouseId: guesthouse.id })
-      });
-      if (response.ok) {
-        if (onRefresh) await onRefresh();
-        alert('All seeded dummy demo data has been cleared from this workspace successfully!');
-      } else {
-        const err = await response.json() as any;
-        alert(err.error || 'Failed to clear demo data.');
+  // Custom confirmation modal state
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDanger?: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
+  const handleClearDemoData = () => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Clear Seeded Demo Data',
+      message: 'Are you sure you want to clear all dummy/seeded bookings, customers, campaigns, message logs, and mock Facebook campaign history from this workspace? Real entries will be preserved.',
+      isDanger: true,
+      onConfirm: async () => {
+        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+        setClearingDemo(true);
+        try {
+          const response = await fetch('/api/marketing/clear-dummy-data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ guesthouseId: guesthouse.id })
+          });
+          if (response.ok) {
+            if (onRefresh) await onRefresh();
+            alert('All seeded dummy demo data has been cleared from this workspace successfully!');
+          } else {
+            const err = (await response.json()) as any;
+            alert(err.error || 'Failed to clear demo data.');
+          }
+        } catch (err) {
+          console.error(err);
+          alert('Error connecting to API to clear demo data.');
+        } finally {
+          setClearingDemo(false);
+        }
       }
-    } catch (err) {
-      console.error(err);
-      alert('Error connecting to API to clear demo data.');
-    } finally {
-      setClearingDemo(false);
-    }
+    });
   };
 
   // Load Employees
@@ -224,53 +245,67 @@ export default function SettingsView({
   };
 
   // Delete Employee
-  const handleDeleteEmployee = async (id: string, name: string) => {
+  const handleDeleteEmployee = (id: string, name: string) => {
     if (id === currentUser.id) {
       alert('You cannot delete your own admin account. Please contact support if you need to transfer ownership.');
       return;
     }
-    if (!confirm(`Are you sure you want to remove ${name} from your team?`)) return;
-    try {
-      const response = await fetch(`/api/employees/${id}`, {
-        method: 'DELETE'
-      });
-      if (response.ok) {
-        await fetchEmployees();
-      } else {
-        const err = (await response.json()) as any;
-        alert(err.error || 'Failed to delete team member');
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Remove Team Member',
+      message: `Are you sure you want to remove ${name} from your team? They will immediately lose workspace access.`,
+      isDanger: true,
+      onConfirm: async () => {
+        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+        try {
+          const response = await fetch(`/api/employees/${id}`, {
+            method: 'DELETE'
+          });
+          if (response.ok) {
+            await fetchEmployees();
+          } else {
+            const err = (await response.json()) as any;
+            alert(err.error || 'Failed to delete team member');
+          }
+        } catch (err) {
+          console.error(err);
+        }
       }
-    } catch (err) {
-      console.error(err);
-    }
+    });
   };
 
   // Cancel Subscription
-  const handleCancelSubscription = async () => {
-    if (!confirm('Are you sure you want to cancel your Premium Guesthouse Subscription? You will lose access to automated checkout review collection and AI insights once your billing cycle ends.')) {
-      return;
-    }
-    setCancellingSubscription(true);
-    try {
-      const response = await fetch(`/api/guesthouse/${guesthouse.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subscriptionStatus: 'CANCELLED'
-        })
-      });
-      if (response.ok) {
-        const data = (await response.json()) as any;
-        onUpdateGuesthouse(data.guesthouse);
-        alert('Your premium subscription has been cancelled. You will continue to have premium benefits until the end of your cycle.');
-      } else {
-        alert('Failed to cancel subscription.');
+  const handleCancelSubscription = () => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Cancel Premium Subscription',
+      message: 'Are you sure you want to cancel your Premium Guesthouse Subscription? You will lose access to automated checkout review collection and AI insights once your billing cycle ends.',
+      isDanger: true,
+      onConfirm: async () => {
+        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+        setCancellingSubscription(true);
+        try {
+          const response = await fetch(`/api/guesthouse/${guesthouse.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              subscriptionStatus: 'CANCELLED'
+            })
+          });
+          if (response.ok) {
+            const data = (await response.json()) as any;
+            onUpdateGuesthouse(data.guesthouse);
+            alert('Your premium subscription has been cancelled. You will continue to have premium benefits until the end of your cycle.');
+          } else {
+            alert('Failed to cancel subscription.');
+          }
+        } catch (err) {
+          console.error(err);
+        } finally {
+          setCancellingSubscription(false);
+        }
       }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setCancellingSubscription(false);
-    }
+    });
   };
 
   // Delete Account
@@ -771,6 +806,15 @@ export default function SettingsView({
           </div>
         </div>
       )}
+
+      <ConfirmationModal
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        onConfirm={confirmConfig.onConfirm}
+        isDanger={confirmConfig.isDanger}
+        onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }

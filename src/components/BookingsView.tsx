@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Calendar, PlusCircle, Search, Upload, CheckCircle2, Trash2, ArrowUpRight, HelpCircle, Settings, X, ChevronLeft, ChevronRight, LayoutList } from 'lucide-react';
 import { Booking, Guesthouse } from '../types';
+import ConfirmationModal from './ConfirmationModal';
 
 interface BookingsViewProps {
   bookings: Booking[];
@@ -51,6 +52,19 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
   const [showRoomsModal, setShowRoomsModal] = useState(false);
   const [newRoomInput, setNewRoomInput] = useState('');
   const [updatingRooms, setUpdatingRooms] = useState(false);
+
+  // Custom confirmation modal state
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
 
   // D1/SQLite stores JSON as a string — parse it safely before use
   const parseRooms = (raw: any): string[] => {
@@ -220,19 +234,25 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
     }
   };
 
-  // Delete booking
-  const deleteBooking = async (id: string) => {
-    if (!confirm('Are you sure you want to cancel and delete this booking?')) return;
-    try {
-      const response = await fetch(`/api/bookings/${id}`, {
-        method: 'DELETE'
-      });
-      if (response.ok) {
-        await onRefresh();
+  const deleteBooking = (id: string) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Cancel & Delete Booking',
+      message: 'Are you sure you want to cancel and delete this booking? This will remove the guest check-in allocation.',
+      onConfirm: async () => {
+        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+        try {
+          const response = await fetch(`/api/bookings/${id}`, {
+            method: 'DELETE'
+          });
+          if (response.ok) {
+            await onRefresh();
+          }
+        } catch (err) {
+          console.error(err);
+        }
       }
-    } catch (err) {
-      console.error(err);
-    }
+    });
   };
 
   // Drag and drop events
@@ -1036,6 +1056,14 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
           </div>
         </div>
       )}
+
+      <ConfirmationModal
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }

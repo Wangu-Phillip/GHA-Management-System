@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Customer } from '../types';
 import { Search, Plus, UserPlus, CheckCircle, Shield, Phone, Mail, User } from 'lucide-react';
+import ConfirmationModal from './ConfirmationModal';
 
 interface CustomersProps {
   customers: Customer[];
@@ -14,6 +15,19 @@ export default function CustomersView({ customers, guesthouseId, onRefresh }: Cu
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+
+  // Custom confirmation modal state
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
 
   const [formData, setFormData] = useState({
     name: '',
@@ -142,22 +156,29 @@ export default function CustomersView({ customers, guesthouseId, onRefresh }: Cu
     }
   };
 
-  const handleDeleteClick = async (customer: Customer) => {
-    if (!confirm(`Are you sure you want to delete ${customer.name}? This cannot be undone.`)) return;
-    try {
-      const response = await fetch(`/api/customers/${customer.id}`, {
-        method: 'DELETE'
-      });
+  const handleDeleteClick = (customer: Customer) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Delete Customer Profile',
+      message: `Are you sure you want to delete ${customer.name}? This will remove their guest records from the registry.`,
+      onConfirm: async () => {
+        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+        try {
+          const response = await fetch(`/api/customers/${customer.id}`, {
+            method: 'DELETE'
+          });
 
-      if (response.ok) {
-        await onRefresh();
-      } else {
-        const err = (await response.json()) as any;
-        alert(err.error || 'Failed to delete customer registry entry');
+          if (response.ok) {
+            await onRefresh();
+          } else {
+            const err = (await response.json()) as any;
+            alert(err.error || 'Failed to delete customer registry entry');
+          }
+        } catch (err) {
+          console.error(err);
+        }
       }
-    } catch (err) {
-      console.error(err);
-    }
+    });
   };
 
   // Toggle GDPR consent
@@ -615,6 +636,14 @@ export default function CustomersView({ customers, guesthouseId, onRefresh }: Cu
           </div>
         </div>
       )}
+
+      <ConfirmationModal
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }

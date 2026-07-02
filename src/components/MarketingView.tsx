@@ -6,6 +6,7 @@ import {
   MessageCircle, AlertCircle, Eye, CornerDownRight, QrCode, Zap, Wifi,
   WifiOff, Copy, CheckCheck, Bell, BellOff, Trash2
 } from 'lucide-react';
+import ConfirmationModal from './ConfirmationModal';
 
 interface MarketingProps {
   campaigns: Campaign[];
@@ -127,6 +128,19 @@ export default function MarketingView({
   // Automation states
   const [automationTriggering, setAutomationTriggering] = useState(false);
   const [automationResult, setAutomationResult] = useState<any>(null);
+
+  // Custom confirmation modal state
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
 
   // Single Quick Message States
   const [quickPhone, setQuickPhone] = useState('');
@@ -379,43 +393,53 @@ export default function MarketingView({
     }
   };
 
-  const handleDeleteCampaign = async (campaignId: string, e: React.MouseEvent) => {
+  const handleDeleteCampaign = (campaignId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('Are you sure you want to delete this campaign? This will remove the campaign record and its stats.')) {
-      return;
-    }
-    try {
-      const res = await fetch(`/api/marketing/campaigns/${campaignId}?guesthouseId=${guesthouseId}`, {
-        method: 'DELETE'
-      });
-      if (res.ok) {
-        await onRefresh();
-      } else {
-        const err = (await res.json()) as any;
-        alert(err.error || 'Failed to delete campaign');
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Delete WhatsApp Campaign',
+      message: 'Are you sure you want to delete this campaign? This will remove the campaign record and its stats.',
+      onConfirm: async () => {
+        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+        try {
+          const res = await fetch(`/api/marketing/campaigns/${campaignId}?guesthouseId=${guesthouseId}`, {
+            method: 'DELETE'
+          });
+          if (res.ok) {
+            await onRefresh();
+          } else {
+            const err = (await res.json()) as any;
+            alert(err.error || 'Failed to delete campaign');
+          }
+        } catch {
+          alert('Error connecting to Express server');
+        }
       }
-    } catch {
-      alert('Error connecting to Express server');
-    }
+    });
   };
 
-  const handleDeleteLog = async (logId: string) => {
-    if (!confirm('Are you sure you want to delete this message log audit entry? This cannot be undone.')) {
-      return;
-    }
-    try {
-      const res = await fetch(`/api/marketing/whatsapp-logs/${logId}?guesthouseId=${guesthouseId}`, {
-        method: 'DELETE'
-      });
-      if (res.ok) {
-        await onRefresh();
-      } else {
-        const err = (await res.json()) as any;
-        alert(err.error || 'Failed to delete log entry');
+  const handleDeleteLog = (logId: string) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Delete Message Log Audit Entry',
+      message: 'Are you sure you want to delete this message log audit entry? This cannot be undone.',
+      onConfirm: async () => {
+        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+        try {
+          const res = await fetch(`/api/marketing/whatsapp-logs/${logId}?guesthouseId=${guesthouseId}`, {
+            method: 'DELETE'
+          });
+          if (res.ok) {
+            await onRefresh();
+          } else {
+            const err = (await res.json()) as any;
+            alert(err.error || 'Failed to delete log entry');
+          }
+        } catch {
+          alert('Error connecting to Express server');
+        }
       }
-    } catch {
-      alert('Error connecting to Express server');
-    }
+    });
   };
 
   // Launch Campaign Blast
@@ -1712,6 +1736,14 @@ export default function MarketingView({
           </form>
         </div>
       )}
+
+      <ConfirmationModal
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }

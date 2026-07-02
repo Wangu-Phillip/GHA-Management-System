@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Guesthouse } from '../types';
 import { Shield, PlusCircle, RefreshCw, Trash2, Calendar, DollarSign, Users, CheckCircle2, AlertTriangle, Play } from 'lucide-react';
+import ConfirmationModal from './ConfirmationModal';
 
 interface SuperAdminProps {
   onRefreshGlobalStats: () => Promise<void>;
@@ -19,6 +20,19 @@ export default function SuperAdminView({ onRefreshGlobalStats, onSwitchTenant }:
   const [stats, setStats] = useState<GlobalStats | null>(null);
   const [guesthouses, setGuesthouses] = useState<Guesthouse[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Custom confirmation modal state
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
 
   // Form state
   const [showAddModal, setShowAddModal] = useState(false);
@@ -90,19 +104,26 @@ export default function SuperAdminView({ onRefreshGlobalStats, onSwitchTenant }:
     }
   };
 
-  const deleteGuesthouse = async (id: string) => {
-    if (!confirm('Are you sure you want to suspend and delete this guesthouse tenant from the network?')) return;
-    try {
-      const response = await fetch(`/api/super/guesthouses/${id}`, {
-        method: 'DELETE'
-      });
-      if (response.ok) {
-        await fetchGlobalStats();
-        await onRefreshGlobalStats();
+  const deleteGuesthouse = (id: string) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Suspend & Delete Guesthouse',
+      message: 'Are you sure you want to suspend and delete this guesthouse tenant from the network? All associated data will be removed.',
+      onConfirm: async () => {
+        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+        try {
+          const response = await fetch(`/api/super/guesthouses/${id}`, {
+            method: 'DELETE'
+          });
+          if (response.ok) {
+            await fetchGlobalStats();
+            await onRefreshGlobalStats();
+          }
+        } catch (err) {
+          console.error(err);
+        }
       }
-    } catch (err) {
-      console.error(err);
-    }
+    });
   };
 
   if (loading) {
@@ -312,6 +333,14 @@ export default function SuperAdminView({ onRefreshGlobalStats, onSwitchTenant }:
           </div>
         </div>
       )}
+
+      <ConfirmationModal
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }
