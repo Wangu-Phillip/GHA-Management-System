@@ -157,6 +157,26 @@ export default function MarketingView({
     [...checkedInGuests, ...upcomingGuests].map(b => [b.customerPhone, b])
   ).values()];
 
+  const [selectedAlertPhones, setSelectedAlertPhones] = useState<string[]>([]);
+
+  useEffect(() => {
+    setSelectedAlertPhones(alertableGuests.map(g => g.customerPhone));
+  }, [bookings]);
+
+  const toggleAlertPhoneSelection = (phone: string) => {
+    setSelectedAlertPhones(prev =>
+      prev.includes(phone) ? prev.filter(p => p !== phone) : [...prev, phone]
+    );
+  };
+
+  const selectAllAlertGuests = () => {
+    setSelectedAlertPhones(alertableGuests.map(g => g.customerPhone));
+  };
+
+  const deselectAllAlertGuests = () => {
+    setSelectedAlertPhones([]);
+  };
+
   const [alertTemplate, setAlertTemplate] = useState(
     'Dear {{name}}, please note that a power/water utility interruption is scheduled in our area from {{startTime}} to {{endTime}} today. We apologise for any inconvenience and have taken steps to ensure your comfort. Thank you for your understanding.'
   );
@@ -168,14 +188,15 @@ export default function MarketingView({
   const [alertDone, setAlertDone] = useState(false);
 
   const sendUtilityAlerts = async () => {
-    if (alertableGuests.length === 0) return;
+    const guestsToSend = alertableGuests.filter(g => selectedAlertPhones.includes(g.customerPhone));
+    if (guestsToSend.length === 0) return;
     setAlertSending(true);
     setAlertResults([]);
     setAlertDone(false);
 
     const results: { name: string; phone: string; status: string }[] = [];
 
-    for (const b of alertableGuests) {
+    for (const b of guestsToSend) {
       const personalized = alertTemplate
         .replace('{{name}}', b.customerName.split(' ')[0])
         .replace('{{startTime}}', alertStartTime)
@@ -969,24 +990,64 @@ export default function MarketingView({
               {/* Guest list */}
               {alertableGuests.length > 0 && (
                 <div className="space-y-2" id="alertable-guests-list">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase">Current & Arriving Guests ({alertableGuests.length})</span>
-                  <div className="border border-gray-100 rounded-xl divide-y divide-gray-50 max-h-40 overflow-y-auto">
-                    {alertableGuests.map((b) => (
-                      <div key={b.id} className="flex items-center justify-between px-4 py-2.5 text-xs hover:bg-gray-50/50">
-                        <div>
-                          <span className="font-semibold text-gray-800">{b.customerName}</span>
-                          <span className="text-gray-400 font-mono ml-2 text-[10px]">{b.customerPhone}</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">
+                      Current & Arriving Guests ({selectedAlertPhones.length} of {alertableGuests.length} Selected)
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={selectAllAlertGuests}
+                        className="text-[10px] text-amber-600 hover:text-amber-800 font-bold uppercase tracking-wider animate-fade-in"
+                        id="btn-select-all-alerts"
+                      >
+                        Select All
+                      </button>
+                      <span className="text-gray-300 text-[10px]">|</span>
+                      <button
+                        type="button"
+                        onClick={deselectAllAlertGuests}
+                        className="text-[10px] text-gray-500 hover:text-gray-700 font-bold uppercase tracking-wider animate-fade-in"
+                        id="btn-deselect-all-alerts"
+                      >
+                        Deselect All
+                      </button>
+                    </div>
+                  </div>
+                  <div className="border border-gray-100 rounded-xl divide-y divide-gray-50 max-h-40 overflow-y-auto bg-gray-50/20">
+                    {alertableGuests.map((b) => {
+                      const isSelected = selectedAlertPhones.includes(b.customerPhone);
+                      return (
+                        <div
+                          key={b.id}
+                          onClick={() => toggleAlertPhoneSelection(b.customerPhone)}
+                          className={`flex items-center justify-between px-4 py-2.5 text-xs cursor-pointer transition-all ${
+                            isSelected ? 'bg-amber-50/40 hover:bg-amber-100/30' : 'bg-white hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}} // toggled by parent click
+                              className="rounded text-amber-500 focus:ring-amber-400 h-3.5 w-3.5 cursor-pointer"
+                            />
+                            <div>
+                              <span className="font-semibold text-gray-800">{b.customerName}</span>
+                              <span className="text-gray-400 font-mono ml-2 text-[10px]">{b.customerPhone}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-500 text-[10px]">{b.roomName.split(' ').slice(0, 2).join(' ')}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                              b.status === 'CHECKED_IN' ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-700'
+                            }`}>
+                              {b.status}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-500 text-[10px]">{b.roomName.split(' ').slice(0, 2).join(' ')}</span>
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                            b.status === 'CHECKED_IN' ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-700'
-                          }`}>
-                            {b.status}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1000,19 +1061,19 @@ export default function MarketingView({
               ) : (
                 <button
                   onClick={sendUtilityAlerts}
-                  disabled={alertSending}
+                  disabled={alertSending || selectedAlertPhones.length === 0}
                   className="w-full sm:w-auto px-6 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm shadow-amber-200 transition-all"
                   id="send-utility-alert-btn"
                 >
                   {alertSending ? (
                     <>
                       <RefreshCw className="h-4 w-4 animate-spin" />
-                      Sending alerts to {alertableGuests.length} guests...
+                      Sending alerts to {selectedAlertPhones.length} guests...
                     </>
                   ) : (
                     <>
                       <Bell className="h-4 w-4" />
-                      Send Utility Alert to All {alertableGuests.length} Guest{alertableGuests.length !== 1 ? 's' : ''}
+                      Send Utility Alert to {selectedAlertPhones.length} Selected Guest{selectedAlertPhones.length !== 1 ? 's' : ''}
                     </>
                   )}
                 </button>
