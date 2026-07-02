@@ -1089,14 +1089,16 @@ app.put('/api/facebook/account', async (c) => {
 // POST /api/facebook/sync — pull latest data from Graph API → normalise → upsert to D1
 app.post('/api/facebook/sync', async (c) => {
   try {
-    const { guesthouseId, days = 30 } = await c.req.json();
+    const { guesthouseId, days } = await c.req.json();
     if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
 
     const account = await (c.var.prisma as any).facebookAdAccount.findUnique({
       where: { guesthouseId },
     });
 
-    const { since, until } = getDateRange(Number(days));
+    // Cap the sync window to 730 days (2 years) to stay safely within Meta's 37-month query limit
+    const syncDays = 730;
+    const { since, until } = getDateRange(syncDays);
     let insights: any[];
     let campaigns: any[];
     const isMockMode = !account || !account.accessToken || account.accessToken === 'DEMO_MODE';
