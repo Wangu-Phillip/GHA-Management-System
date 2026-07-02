@@ -1,5 +1,44 @@
 import type { AppPrisma } from '../db/prisma';
 
+const decryptText = async (encryptedBase64: string | null | undefined, secretKey?: string) => {
+  if (!encryptedBase64 || !secretKey) return encryptedBase64 || '';
+  if (!/^[a-zA-Z0-9+/=]+$/.test(encryptedBase64)) {
+    return encryptedBase64;
+  }
+  try {
+    const encoder = new TextEncoder();
+    const hash = await crypto.subtle.digest('SHA-256', encoder.encode(secretKey));
+    const rawKey = new Uint8Array(hash);
+    const key = await crypto.subtle.importKey(
+      'raw',
+      rawKey,
+      { name: 'AES-GCM' },
+      false,
+      ['encrypt', 'decrypt']
+    );
+
+    const binaryString = atob(encryptedBase64);
+    const combined = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      combined[i] = binaryString.charCodeAt(i);
+    }
+
+    const iv = combined.slice(0, 12);
+    const encryptedData = combined.slice(12);
+
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      encryptedData
+    );
+
+    return new TextDecoder().decode(decrypted);
+  } catch (err) {
+    return encryptedBase64;
+  }
+};
+
+
 export interface WhatsAppConfig {
   phoneId: string;
   token: string;
@@ -247,7 +286,8 @@ export async function sendWhatsAppMessage(
  */
 export async function runCheckoutReviewAutomation(
   prisma: AppPrisma,
-  guesthouseId: string
+  guesthouseId: string,
+  encryptionKey?: string
 ): Promise<{ processed: number; sent: number }> {
   const guesthouse = await prisma.guesthouse.findUnique({ where: { id: guesthouseId } });
   if (!guesthouse) return { processed: 0, sent: 0 };
@@ -266,12 +306,16 @@ export async function runCheckoutReviewAutomation(
     },
   });
 
+  const decryptedPhoneId = await decryptText(guesthouse.whatsappPhoneId, encryptionKey);
+  const decryptedToken = await decryptText(guesthouse.whatsappToken, encryptionKey);
+  const decryptedBusinessId = await decryptText(guesthouse.whatsappBusinessId, encryptionKey);
+
   const waConfig: WhatsAppConfig | undefined =
-    guesthouse.whatsappPhoneId && guesthouse.whatsappToken
+    decryptedPhoneId && decryptedToken
       ? {
-          phoneId: guesthouse.whatsappPhoneId,
-          token: guesthouse.whatsappToken,
-          businessId: guesthouse.whatsappBusinessId || undefined,
+          phoneId: decryptedPhoneId,
+          token: decryptedToken,
+          businessId: decryptedBusinessId || undefined,
         }
       : undefined;
 
@@ -313,7 +357,8 @@ export async function executeMarketingCampaign(
   guesthouseId: string,
   campaignName: string,
   templateContent: string,
-  customerIds?: string[]
+  customerIds?: string[],
+  encryptionKey?: string
 ): Promise<{ totalOptIn: number; sent: number }> {
   const guesthouse = await prisma.guesthouse.findUnique({ where: { id: guesthouseId } });
   if (!guesthouse) return { totalOptIn: 0, sent: 0 };
@@ -326,12 +371,16 @@ export async function executeMarketingCampaign(
     },
   });
 
+  const decryptedPhoneId = await decryptText(guesthouse.whatsappPhoneId, encryptionKey);
+  const decryptedToken = await decryptText(guesthouse.whatsappToken, encryptionKey);
+  const decryptedBusinessId = await decryptText(guesthouse.whatsappBusinessId, encryptionKey);
+
   const waConfig: WhatsAppConfig | undefined =
-    guesthouse.whatsappPhoneId && guesthouse.whatsappToken
+    decryptedPhoneId && decryptedToken
       ? {
-          phoneId: guesthouse.whatsappPhoneId,
-          token: guesthouse.whatsappToken,
-          businessId: guesthouse.whatsappBusinessId || undefined,
+          phoneId: decryptedPhoneId,
+          token: decryptedToken,
+          businessId: decryptedBusinessId || undefined,
         }
       : undefined;
 

@@ -23,6 +23,9 @@ export type Bindings = {
   DB: D1Database;
   GEMINI_API_KEY?: string;
   WHATSAPP_VERIFY_TOKEN?: string;
+  FIREBASE_API_KEY?: string;
+  ENCRYPTION_KEY?: string;
+  RATE_LIMITER?: any;
   ASSETS?: Fetcher;
 };
 
@@ -32,6 +35,154 @@ export type Variables = {
 };
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+// ==========================================
+// Encryption Helpers (At-Rest Security via Web Crypto AES-GCM)
+// ==========================================
+const getRawKey = async (secretKey: string) => {
+  const encoder = new TextEncoder();
+  const hash = await crypto.subtle.digest('SHA-256', encoder.encode(secretKey));
+  return new Uint8Array(hash);
+};
+
+const getEncryptionKey = (c: any) => {
+  return c.env?.ENCRYPTION_KEY || 'default_system_wide_secure_key_for_rest_encryption_2026';
+};
+
+const encryptText = async (text: string | null | undefined, secretKey: string) => {
+  if (!text) return '';
+  try {
+    const rawKey = await getRawKey(secretKey);
+    const key = await crypto.subtle.importKey(
+      'raw',
+      rawKey,
+      { name: 'AES-GCM' },
+      false,
+      ['encrypt', 'decrypt']
+    );
+
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encodedText = new TextEncoder().encode(text);
+    const encrypted = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      encodedText
+    );
+
+    const encryptedArray = new Uint8Array(encrypted);
+    const combined = new Uint8Array(iv.length + encryptedArray.length);
+    combined.set(iv);
+    combined.set(encryptedArray, iv.length);
+
+    let binary = '';
+    const len = combined.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(combined[i]);
+    }
+    return btoa(binary);
+  } catch (err) {
+    console.error('Encryption error:', err);
+    return text;
+  }
+};
+
+const decryptText = async (encryptedBase64: string | null | undefined, secretKey: string) => {
+  if (!encryptedBase64) return '';
+  if (!/^[a-zA-Z0-9+/=]+$/.test(encryptedBase64)) {
+    return encryptedBase64;
+  }
+  try {
+    const rawKey = await getRawKey(secretKey);
+    const key = await crypto.subtle.importKey(
+      'raw',
+      rawKey,
+      { name: 'AES-GCM' },
+      false,
+      ['encrypt', 'decrypt']
+    );
+
+    const binaryString = atob(encryptedBase64);
+    const combined = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      combined[i] = binaryString.charCodeAt(i);
+    }
+
+    const iv = combined.slice(0, 12);
+    const encryptedData = combined.slice(12);
+
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      encryptedData
+    );
+
+    return new TextDecoder().decode(decrypted);
+  } catch (err) {
+    return encryptedBase64;
+  }
+};
+
+// ==========================================
+// Rate Limiter Middleware
+// ==========================================
+const localRateLimitCache = new Map<string, { count: number; expiresAt: number }>();
+
+const rateLimiter = (options: { limit: number; timeframeMs: number }) => {
+  return async (c: any, next: any) => {
+    const ip = c.req.header('CF-Connecting-IP') || '127.0.0.1';
+
+    // Support Workers Rate Limiting API if configured in wrangler / production
+    if (c.env?.RATE_LIMITER) {
+      try {
+        const { success } = await c.env.RATE_LIMITER.limit({ key: ip });
+        if (!success) {
+          return c.json({ error: 'Too many requests. Please try again later.' }, 429);
+        }
+        await next();
+        return;
+      } catch (err) {
+        console.error('Workers Rate Limiting error, falling back to local memory cache:', err);
+      }
+    }
+
+    // Fallback: Local memory rate limiter (cleans up expired records on access)
+    const now = Date.now();
+    const record = localRateLimitCache.get(ip);
+    if (!record || record.expiresAt < now) {
+      localRateLimitCache.set(ip, { count: 1, expiresAt: now + options.timeframeMs });
+    } else {
+      if (record.count >= options.limit) {
+        return c.json({ error: 'Too many requests. Please try again later.' }, 429);
+      }
+      record.count += 1;
+    }
+
+    await next();
+  };
+};
+
+
+// ==========================================
+// Redaction Helpers (Mask secrets before returning to client)
+// ==========================================
+const redactGuesthouse = (gh: any) => {
+  if (!gh) return null;
+  return {
+    ...gh,
+    whatsappToken: gh.whatsappToken ? '••••••••' : null,
+    whatsappPhoneId: gh.whatsappPhoneId ? '••••••••' : null,
+    whatsappBusinessId: gh.whatsappBusinessId ? '••••••••' : null,
+  };
+};
+
+const redactAdAccount = (acc: any) => {
+  if (!acc) return null;
+  return {
+    ...acc,
+    accessToken: acc.accessToken ? '••••••••' : null,
+    adAccountId: acc.adAccountId ? '••••••••' : null,
+  };
+};
 
 // ---- API middleware: tenant + prisma ----
 app.use('/api/*', async (c, next) => {
@@ -53,6 +204,10 @@ app.use('/api/*', async (c, next) => {
 
   await next();
 });
+
+// ---- Production Rate Limiting ----
+app.use('/api/auth/*', rateLimiter({ limit: 10, timeframeMs: 60000 }));
+app.use('/api/marketing/whatsapp-send', rateLimiter({ limit: 5, timeframeMs: 60000 }));
 
 // ==========================================
 // Health
@@ -283,13 +438,13 @@ app.get('/api/super/guesthouses', async (c) => {
           flags = platformSettings.defaultFeatures;
         }
       }
-      return {
+      return redactGuesthouse({
         ...gh,
         isBlocked: gh.isBlocked === 1 || gh.isBlocked === true,
         isPaused: gh.isPaused === 1 || gh.isPaused === true,
         featureFlags: flags,
         adminCount: gh.users.filter((u: any) => u.role === 'TENANT_ADMIN' || u.role === 'SUPER_ADMIN').length
-      };
+      });
     });
 
     return c.json(formatted);
@@ -385,12 +540,12 @@ app.put('/api/super/guesthouses/:id', async (c) => {
       });
     }
 
-    return c.json({
+    return c.json(redactGuesthouse({
       ...gh,
       featureFlags: gh.featureFlags ? (() => { try { return JSON.parse(gh.featureFlags as string); } catch { return {}; } })() : {},
       isBlocked: gh.isBlocked === 1 || gh.isBlocked === true,
       isPaused: gh.isPaused === 1 || gh.isPaused === true,
-    });
+    }));
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
@@ -594,12 +749,12 @@ app.get('/api/guesthouse', async (c) => {
     const gh = await c.var.prisma.guesthouse.findUnique({ where: { id: guesthouseId } });
     if (!gh) return c.json({ error: 'Guesthouse not found' }, 404);
     const flags = gh.featureFlags ? (() => { try { return JSON.parse(gh.featureFlags as string); } catch { return {}; } })() : {};
-    return c.json({
+    return c.json(redactGuesthouse({
       ...gh,
       featureFlags: flags,
       isBlocked: gh.isBlocked === 1 || gh.isBlocked === true,
       isPaused: gh.isPaused === 1 || gh.isPaused === true,
-    });
+    }));
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
@@ -925,7 +1080,8 @@ app.post('/api/marketing/campaigns', async (c) => {
       guesthouseId,
       campaignName,
       messageTemplate,
-      customerIds
+      customerIds,
+      getEncryptionKey(c)
     );
     return c.json({
       message: `Campaign dispatch completed. Transmitted ${report.sent} messages of ${report.totalOptIn} opted-in subscribers.`,
@@ -967,10 +1123,15 @@ app.post('/api/marketing/whatsapp-send', async (c) => {
       }, 400);
     }
 
+    const encKey = getEncryptionKey(c);
+    const decryptedPhoneId = await decryptText(gh.whatsappPhoneId, encKey);
+    const decryptedToken = await decryptText(gh.whatsappToken, encKey);
+    const decryptedBusinessId = await decryptText(gh.whatsappBusinessId, encKey);
+
     const waConfig = {
-      phoneId: gh.whatsappPhoneId,
-      token: gh.whatsappToken,
-      businessId: gh.whatsappBusinessId || undefined,
+      phoneId: decryptedPhoneId,
+      token: decryptedToken,
+      businessId: decryptedBusinessId || undefined,
     };
 
     const result = await sendWhatsAppMessage(c.var.prisma, {
@@ -1075,27 +1236,54 @@ app.put('/api/marketing/whatsapp-settings', async (c) => {
       await c.req.json();
     if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
 
-    // Validate credentials when provided — must be real values, not placeholders
-    if (whatsappPhoneId !== undefined && whatsappPhoneId !== null && whatsappPhoneId !== '') {
-      if (!/^\d{10,20}$/.test(String(whatsappPhoneId))) {
-        return c.json({ error: 'Invalid Phone Number ID. It must be a numeric string (10–20 digits) from Meta Business Manager.' }, 400);
-      }
-    }
-    if (whatsappBusinessId !== undefined && whatsappBusinessId !== null && whatsappBusinessId !== '') {
-      if (!/^\d{10,20}$/.test(String(whatsappBusinessId))) {
-        return c.json({ error: 'Invalid Business Account ID. It must be a numeric string (10–20 digits) from Meta Business Manager.' }, 400);
-      }
-    }
-    if (whatsappToken !== undefined && whatsappToken !== null && whatsappToken !== '') {
-      if (whatsappToken.length < 20 || whatsappToken === 'EAAGb0ZC...') {
-        return c.json({ error: 'Invalid Access Token. Please use a real System User Token from Meta Business Manager (must be longer than 20 characters).' }, 400);
+    const oldGh = await c.var.prisma.guesthouse.findUnique({ where: { id: guesthouseId } });
+    if (!oldGh) return c.json({ error: 'Guesthouse not found' }, 404);
+
+    const data: any = {};
+    const encKey = getEncryptionKey(c);
+
+    // whatsappPhoneId
+    if (whatsappPhoneId !== undefined) {
+      if (whatsappPhoneId === '••••••••') {
+        // unchanged, keep existing encrypted value
+      } else if (whatsappPhoneId === null || whatsappPhoneId === '') {
+        data.whatsappPhoneId = null;
+      } else {
+        if (!/^\d{10,20}$/.test(String(whatsappPhoneId))) {
+          return c.json({ error: 'Invalid Phone Number ID. It must be a numeric string (10–20 digits) from Meta Business Manager.' }, 400);
+        }
+        data.whatsappPhoneId = await encryptText(String(whatsappPhoneId), encKey);
       }
     }
 
-    const data: any = {};
-    if (whatsappPhoneId !== undefined) data.whatsappPhoneId = whatsappPhoneId || null;
-    if (whatsappToken !== undefined) data.whatsappToken = whatsappToken || null;
-    if (whatsappBusinessId !== undefined) data.whatsappBusinessId = whatsappBusinessId || null;
+    // whatsappBusinessId
+    if (whatsappBusinessId !== undefined) {
+      if (whatsappBusinessId === '••••••••') {
+        // unchanged
+      } else if (whatsappBusinessId === null || whatsappBusinessId === '') {
+        data.whatsappBusinessId = null;
+      } else {
+        if (!/^\d{10,20}$/.test(String(whatsappBusinessId))) {
+          return c.json({ error: 'Invalid Business Account ID. It must be a numeric string (10–20 digits) from Meta Business Manager.' }, 400);
+        }
+        data.whatsappBusinessId = await encryptText(String(whatsappBusinessId), encKey);
+      }
+    }
+
+    // whatsappToken
+    if (whatsappToken !== undefined) {
+      if (whatsappToken === '••••••••') {
+        // unchanged
+      } else if (whatsappToken === null || whatsappToken === '') {
+        data.whatsappToken = null;
+      } else {
+        if (whatsappToken.length < 20 || whatsappToken === 'EAAGb0ZC...') {
+          return c.json({ error: 'Invalid Access Token. Please use a real System User Token from Meta Business Manager (must be longer than 20 characters).' }, 400);
+        }
+        data.whatsappToken = await encryptText(whatsappToken, encKey);
+      }
+    }
+
     if (rooms) data.rooms = Array.isArray(rooms) ? JSON.stringify(rooms) : rooms;
     if (reviewTriggerTime) data.reviewTriggerTime = reviewTriggerTime;
     if (typeof allowLogDeletion === 'boolean') data.allowLogDeletion = allowLogDeletion;
@@ -1103,7 +1291,8 @@ app.put('/api/marketing/whatsapp-settings', async (c) => {
     const updated = await c.var.prisma.guesthouse.update({ where: { id: guesthouseId }, data });
 
     // Auto-clear dummy data if real WhatsApp keys are applied
-    const hasRealKeys = whatsappPhoneId && whatsappToken;
+    const hasRealKeys = updated.whatsappPhoneId && updated.whatsappToken && 
+      (await decryptText(updated.whatsappToken, encKey)) !== 'EAAGb0ZC...';
     if (hasRealKeys) {
       console.log(`[WhatsApp Settings] Real keys applied for ${guesthouseId}. Clearing dummy/seeded records.`);
       await performClearDummyData(c.var.prisma, guesthouseId);
@@ -1111,7 +1300,7 @@ app.put('/api/marketing/whatsapp-settings', async (c) => {
 
     return c.json({
       message: 'Guesthouse marketing settings and custom properties updated successfully',
-      guesthouse: updated,
+      guesthouse: redactGuesthouse(updated),
     });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -1143,7 +1332,7 @@ app.post('/api/marketing/whatsapp-automations/trigger-review', async (c) => {
       return c.json({ error: 'Portal access or subscription is restricted.' }, 403);
     }
 
-    const outcome = await runCheckoutReviewAutomation(c.var.prisma, guesthouseId);
+    const outcome = await runCheckoutReviewAutomation(c.var.prisma, guesthouseId, getEncryptionKey(c));
     return c.json({
       message: `Daily checkout review scanner completed successfully for today.`,
       processedCheckoutsTodayCount: outcome.processed,
@@ -1551,7 +1740,7 @@ app.get('/api/facebook/account', async (c) => {
     const account = await (c.var.prisma as any).facebookAdAccount.findUnique({
       where: { guesthouseId },
     });
-    return c.json(account || null);
+    return c.json(redactAdAccount(account));
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
@@ -1566,14 +1755,30 @@ app.put('/api/facebook/account', async (c) => {
       return c.json({ error: 'guesthouseId, adAccountId, and accessToken are required' }, 400);
     }
 
-    const normalizedAdAccountId = adAccountId.trim();
-    if (!/^\d+$/.test(normalizedAdAccountId)) {
-      return c.json({ error: 'Invalid Ad Account ID format. It must consist only of numbers.' }, 400);
+    const encKey = getEncryptionKey(c);
+    const oldAccount = await (c.var.prisma as any).facebookAdAccount.findUnique({ where: { guesthouseId } });
+
+    let finalAdAccountId = adAccountId;
+    if (adAccountId === '••••••••') {
+      if (!oldAccount) return c.json({ error: 'No existing connected Facebook account to update.' }, 400);
+      finalAdAccountId = oldAccount.adAccountId;
+    } else {
+      const normalizedAdAccountId = adAccountId.trim();
+      if (!/^\d+$/.test(normalizedAdAccountId)) {
+        return c.json({ error: 'Invalid Ad Account ID format. It must consist only of numbers.' }, 400);
+      }
+      finalAdAccountId = await encryptText(normalizedAdAccountId, encKey);
     }
 
-    // Reject demo/placeholder tokens
-    if (accessToken === 'DEMO_MODE' || accessToken.length < 20) {
-      return c.json({ error: 'A valid Facebook Access Token is required. Please generate one from the Meta Business Manager.' }, 400);
+    let finalAccessToken = accessToken;
+    if (accessToken === '••••••••') {
+      if (!oldAccount) return c.json({ error: 'No existing connected Facebook account to update.' }, 400);
+      finalAccessToken = oldAccount.accessToken;
+    } else {
+      if (accessToken.length < 20 || accessToken === 'DEMO_MODE') {
+        return c.json({ error: 'A valid Facebook Access Token is required. Please generate one from the Meta Business Manager.' }, 400);
+      }
+      finalAccessToken = await encryptText(accessToken, encKey);
     }
 
     // Validate feature access
@@ -1590,15 +1795,15 @@ app.put('/api/facebook/account', async (c) => {
 
     const account = await (c.var.prisma as any).facebookAdAccount.upsert({
       where: { guesthouseId },
-      create: { guesthouseId, adAccountId: normalizedAdAccountId, accessToken, pageId, accountName, currency, timezone },
-      update: { adAccountId: normalizedAdAccountId, accessToken, pageId, accountName, currency, timezone, updatedAt: new Date() },
+      create: { guesthouseId, adAccountId: finalAdAccountId, accessToken: finalAccessToken, pageId, accountName, currency, timezone },
+      update: { adAccountId: finalAdAccountId, accessToken: finalAccessToken, pageId, accountName, currency, timezone, updatedAt: new Date() },
     });
 
     // Auto-clear dummy data now that real Facebook keys are applied
     console.log(`[Facebook Settings] Real keys applied for ${guesthouseId}. Clearing dummy/seeded records.`);
     await performClearDummyData(c.var.prisma, guesthouseId);
 
-    return c.json({ message: 'Ad account connected successfully', account });
+    return c.json({ message: 'Ad account connected successfully', account: redactAdAccount(account) });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
@@ -1619,20 +1824,24 @@ app.post('/api/facebook/sync', async (c) => {
     const { since, until } = getDateRange(syncDays);
     let insights: any[];
     let campaigns: any[];
-    const isMockMode = !account || !account.accessToken || account.accessToken === 'DEMO_MODE';
+    const encKey = getEncryptionKey(c);
+    const decryptedToken = await decryptText(account?.accessToken, encKey);
+    const decryptedAdAccountId = await decryptText(account?.adAccountId, encKey);
+
+    const isMockMode = !account || !decryptedToken || decryptedToken === 'DEMO_MODE';
 
     if (isMockMode) {
       // Use synthetic data when no real credentials are configured
-      insights = generateMockInsights(account?.adAccountId || 'act_demo');
+      insights = generateMockInsights(decryptedAdAccountId || 'act_demo');
       campaigns = generateMockCampaigns();
     } else {
       // Real Graph API calls
-      insights = await fetchAdInsights(account.accessToken, account.adAccountId, {
+      insights = await fetchAdInsights(decryptedToken, decryptedAdAccountId, {
         since,
         until,
         level: 'campaign',
       });
-      campaigns = await fetchCampaigns(account.accessToken, account.adAccountId);
+      campaigns = await fetchCampaigns(decryptedToken, decryptedAdAccountId);
     }
 
     // Upsert campaigns into D1
@@ -1744,10 +1953,14 @@ app.post('/api/facebook/campaigns', async (c) => {
       where: { guesthouseId },
     });
 
-    const isMockMode = !account || !account.accessToken || account.accessToken === 'DEMO_MODE';
+    const encKey = getEncryptionKey(c);
+    const decryptedToken = await decryptText(account?.accessToken, encKey);
+    const decryptedAdAccountId = await decryptText(account?.adAccountId, encKey);
+
+    const isMockMode = !account || !decryptedToken || decryptedToken === 'DEMO_MODE';
     const campaignId = isMockMode
       ? `mock-camp-${Date.now()}`
-      : (await createCampaign(account.accessToken, account.adAccountId, {
+      : (await createCampaign(decryptedToken, decryptedAdAccountId, {
           name,
           objective,
           dailyBudget,
@@ -1790,9 +2003,12 @@ app.patch('/api/facebook/campaigns/:id/budget', async (c) => {
       where: { guesthouseId },
     });
 
-    const isMockMode = !account || !account.accessToken || account.accessToken === 'DEMO_MODE';
+    const encKey = getEncryptionKey(c);
+    const decryptedToken = await decryptText(account?.accessToken, encKey);
+
+    const isMockMode = !account || !decryptedToken || decryptedToken === 'DEMO_MODE';
     if (!isMockMode) {
-      await updateCampaignBudget(account.accessToken, id, Math.round(Number(dailyBudget) * 100));
+      await updateCampaignBudget(decryptedToken, id, Math.round(Number(dailyBudget) * 100));
     }
 
     const updated = await (c.var.prisma as any).facebookCampaign.update({
