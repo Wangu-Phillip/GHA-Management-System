@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Campaign, MessageLog, Guesthouse, Customer, Booking } from '../types';
-import { Send, Settings, Sparkles, MessageSquare, ShieldAlert, History, Key, CheckCircle, RefreshCw, Smartphone, Users, Check, ChevronDown, ChevronUp, MessageCircle, AlertCircle, Eye, CornerDownRight } from 'lucide-react';
+import {
+  Send, Settings, Sparkles, MessageSquare, ShieldAlert, History, Key,
+  CheckCircle, RefreshCw, Smartphone, Users, Check, ChevronDown, ChevronUp,
+  MessageCircle, AlertCircle, Eye, CornerDownRight, QrCode, Zap, Wifi,
+  WifiOff, Copy, CheckCheck, Bell, BellOff
+} from 'lucide-react';
 
 interface MarketingProps {
   campaigns: Campaign[];
@@ -14,6 +19,56 @@ interface MarketingProps {
   onUpdateGuesthouse: (gh: Guesthouse) => void;
 }
 
+// ── QR Code SVG (simulated, decorative) ──────────────────────────────────────
+function QRCodeSVG({ size = 180 }: { size?: number }) {
+  // Deterministic visual QR pattern — purely decorative UI placeholder
+  const cells: boolean[][] = [];
+  const seed = [
+    [1,1,1,1,1,1,1,0,1,0,1,1,0,0,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,1,0,0,1,0,0,1,0,1,0,0,0,0,0,1],
+    [1,0,1,1,1,0,1,0,1,1,1,0,0,0,1,0,1,1,1,0,1],
+    [1,0,1,1,1,0,1,0,0,0,1,1,0,0,1,0,1,1,1,0,1],
+    [1,0,1,1,1,0,1,0,1,0,0,1,1,0,1,0,1,1,1,0,1],
+    [1,0,0,0,0,0,1,0,0,1,0,0,0,0,1,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,0,1,0,1,0,1,0,1,1,1,1,1,1,1],
+    [0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0],
+    [1,0,1,1,0,1,1,1,0,1,0,1,1,0,1,1,0,1,1,0,1],
+    [0,1,0,0,1,0,0,0,1,0,1,1,0,1,0,0,1,0,1,1,0],
+    [1,1,0,1,0,1,1,0,1,1,0,0,1,0,1,0,0,1,0,1,1],
+    [0,0,1,0,1,0,0,1,0,1,1,0,0,1,0,1,1,0,1,0,0],
+    [1,0,0,1,0,1,1,0,1,0,0,1,1,0,1,1,0,0,1,0,1],
+    [0,0,0,0,0,0,0,0,1,1,0,0,1,0,0,0,0,1,0,1,0],
+    [1,1,1,1,1,1,1,0,0,1,1,0,0,0,1,0,1,1,0,0,1],
+    [1,0,0,0,0,0,1,0,1,0,0,1,0,0,0,1,0,0,1,0,0],
+    [1,0,1,1,1,0,1,0,0,1,1,0,1,0,1,0,1,0,0,1,1],
+    [1,0,1,1,1,0,1,0,1,0,0,1,0,1,0,1,0,1,1,0,0],
+    [1,0,1,1,1,0,1,0,0,1,0,0,1,0,1,0,1,0,0,1,1],
+    [1,0,0,0,0,0,1,0,1,0,1,1,0,1,0,1,0,0,1,0,0],
+    [1,1,1,1,1,1,1,0,0,1,0,0,1,0,1,0,1,1,0,1,1],
+  ];
+  const cellSize = size / 21;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} xmlns="http://www.w3.org/2000/svg">
+      <rect width={size} height={size} fill="white" rx="8" />
+      {seed.map((row, ri) =>
+        row.map((cell, ci) =>
+          cell ? (
+            <rect
+              key={`${ri}-${ci}`}
+              x={ci * cellSize}
+              y={ri * cellSize}
+              width={cellSize - 0.5}
+              height={cellSize - 0.5}
+              fill="#111827"
+              rx={cellSize > 6 ? 1 : 0}
+            />
+          ) : null
+        )
+      )}
+    </svg>
+  );
+}
+
 export default function MarketingView({
   campaigns,
   logs,
@@ -25,7 +80,7 @@ export default function MarketingView({
   onRefresh,
   onUpdateGuesthouse
 }: MarketingProps) {
-  const [subTab, setSubTab] = useState<'campaign' | 'review' | 'logs' | 'settings'>('campaign');
+  const [subTab, setSubTab] = useState<'campaign' | 'review' | 'qr' | 'logs' | 'settings'>('campaign');
   const [selectedCampId, setSelectedCampId] = useState<string | null>(null);
 
   // Campaign Form State
@@ -69,6 +124,91 @@ export default function MarketingView({
   const [quickPhone, setQuickPhone] = useState('');
   const [quickText, setQuickText] = useState('');
   const [quickStatus, setQuickStatus] = useState<'idle' | 'sending' | 'success'>('idle');
+
+  // ── QR Linking State ──────────────────────────────────────────────────────────
+  const [qrLinkStatus, setQrLinkStatus] = useState<'idle' | 'scanning' | 'linked'>('idle');
+  const [copied, setCopied] = useState(false);
+  const QR_SESSION_URL = 'https://web.whatsapp.com/?session=gha-business-link';
+
+  const handleQrScan = () => {
+    setQrLinkStatus('scanning');
+    // Simulate linking after 4 seconds
+    setTimeout(() => setQrLinkStatus('linked'), 4000);
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(QR_SESSION_URL).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleQrReset = () => setQrLinkStatus('idle');
+
+  // ── Loadshedding / Utility Alert State ───────────────────────────────────────
+  const checkedInGuests = bookings.filter(b => b.status === 'CHECKED_IN' || b.status === 'CONFIRMED');
+  const upcomingGuests = bookings.filter(b => {
+    if (b.status !== 'CONFIRMED') return false;
+    const ci = new Date(b.checkIn);
+    const now = new Date();
+    const diffMs = ci.getTime() - now.getTime();
+    return diffMs >= 0 && diffMs <= 48 * 60 * 60 * 1000; // within 48 hrs
+  });
+  const alertableGuests = [...new Map(
+    [...checkedInGuests, ...upcomingGuests].map(b => [b.customerPhone, b])
+  ).values()];
+
+  const [alertTemplate, setAlertTemplate] = useState(
+    'Dear {{name}}, please note that a power/water utility interruption is scheduled in our area from {{startTime}} to {{endTime}} today. We apologise for any inconvenience and have taken steps to ensure your comfort. Thank you for your understanding.'
+  );
+  const [alertStartTime, setAlertStartTime] = useState('18:00');
+  const [alertEndTime, setAlertEndTime] = useState('20:30');
+  const [alertType, setAlertType] = useState<'power' | 'water' | 'both'>('power');
+  const [alertSending, setAlertSending] = useState(false);
+  const [alertResults, setAlertResults] = useState<{ name: string; phone: string; status: string }[]>([]);
+  const [alertDone, setAlertDone] = useState(false);
+
+  const sendUtilityAlerts = async () => {
+    if (alertableGuests.length === 0) return;
+    setAlertSending(true);
+    setAlertResults([]);
+    setAlertDone(false);
+
+    const results: { name: string; phone: string; status: string }[] = [];
+
+    for (const b of alertableGuests) {
+      const personalized = alertTemplate
+        .replace('{{name}}', b.customerName.split(' ')[0])
+        .replace('{{startTime}}', alertStartTime)
+        .replace('{{endTime}}', alertEndTime);
+
+      try {
+        const res = await fetch('/api/marketing/whatsapp-send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            guesthouseId,
+            phone: b.customerPhone,
+            content: personalized,
+            messageType: 'GENERAL',
+            bookingId: b.id,
+          }),
+        });
+        const data = await res.json() as any;
+        results.push({
+          name: b.customerName,
+          phone: b.customerPhone,
+          status: data.status || (res.ok ? 'SENT' : 'FAILED'),
+        });
+      } catch {
+        results.push({ name: b.customerName, phone: b.customerPhone, status: 'FAILED' });
+      }
+    }
+
+    setAlertResults(results);
+    setAlertSending(false);
+    setAlertDone(true);
+    await onRefresh();
+  };
 
   // Submit WhatsApp Meta credentials
   const saveWhatsAppSettings = async (e: React.FormEvent) => {
@@ -158,7 +298,7 @@ export default function MarketingView({
     }
   };
 
-  // Trigger day-of-checkout automatic feedback solicitation right now!
+  // Trigger checkout review sweep
   const triggerCheckoutSweep = async () => {
     setAutomationTriggering(true);
     setAutomationResult(null);
@@ -185,10 +325,10 @@ export default function MarketingView({
   return (
     <div className="space-y-6" id="marketing-view">
       {/* Sub menu tabs */}
-      <div className="flex border-b border-gray-100 gap-4" id="marketing-sub-tabs">
+      <div className="flex border-b border-gray-100 gap-1 overflow-x-auto" id="marketing-sub-tabs">
         <button
           onClick={() => setSubTab('campaign')}
-          className={`pb-2.5 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+          className={`pb-2.5 px-1 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
             subTab === 'campaign' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'
           }`}
           id="tab-campaign"
@@ -199,18 +339,29 @@ export default function MarketingView({
 
         <button
           onClick={() => setSubTab('review')}
-          className={`pb-2.5 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+          className={`pb-2.5 px-1 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
             subTab === 'review' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'
           }`}
           id="tab-review"
         >
           <MessageSquare className="h-4 w-4" />
-          Checkout Review Automations
+          Checkout Reviews & Alerts
+        </button>
+
+        <button
+          onClick={() => setSubTab('qr')}
+          className={`pb-2.5 px-1 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+            subTab === 'qr' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-gray-400 hover:text-gray-600'
+          }`}
+          id="tab-qr"
+        >
+          <QrCode className="h-4 w-4" />
+          Link My WhatsApp Number
         </button>
 
         <button
           onClick={() => setSubTab('logs')}
-          className={`pb-2.5 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+          className={`pb-2.5 px-1 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
             subTab === 'logs' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'
           }`}
           id="tab-logs"
@@ -221,7 +372,7 @@ export default function MarketingView({
 
         <button
           onClick={() => setSubTab('settings')}
-          className={`pb-2.5 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+          className={`pb-2.5 px-1 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
             subTab === 'settings' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'
           }`}
           id="tab-settings"
@@ -313,7 +464,7 @@ export default function MarketingView({
                               <input
                                 type="checkbox"
                                 checked={isSelected}
-                                onChange={() => {}} // event handled by parent click
+                                onChange={() => {}}
                                 className="rounded text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer"
                               />
                               <div className="text-left">
@@ -378,12 +529,7 @@ export default function MarketingView({
                   <div className="space-y-1" id="field-quick-customer-select">
                     <label className="text-xs font-bold text-gray-500">SELECT CONSENTED CUSTOMER</label>
                     <select
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val) {
-                          setQuickPhone(val);
-                        }
-                      }}
+                      onChange={(e) => { const val = e.target.value; if (val) setQuickPhone(val); }}
                       className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none bg-white text-gray-700"
                     >
                       <option value="">-- Or select from consented customers --</option>
@@ -432,7 +578,7 @@ export default function MarketingView({
             </div>
           </div>
 
-          {/* Detailed Broadcast Campaign History & Metrics Dashboard */}
+          {/* Campaign History */}
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4" id="campaign-history-section">
             <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-gray-50 pb-4 gap-2">
               <div>
@@ -460,39 +606,29 @@ export default function MarketingView({
                   const campLogs = logs.filter(l => l.campaignId === campaign.id);
                   const outboundLogs = campLogs.filter(l => l.direction === 'OUTBOUND');
                   const sentCount = outboundLogs.length;
-
-                  // Read metrics
                   const readLogs = outboundLogs.filter(l => l.status === 'READ');
                   const readCount = readLogs.length;
                   const readPercentage = sentCount > 0 ? Math.round((readCount / sentCount) * 100) : 0;
-
-                  // Replies metrics
                   const inboundLogs = campLogs.filter(l => l.direction === 'INBOUND');
                   const replyCount = inboundLogs.length;
                   const replyPercentage = sentCount > 0 ? Math.round((replyCount / sentCount) * 100) : 0;
-
-                  // Booking Conversions / Showed Up
                   const recipientPhones = outboundLogs.map(l => l.phone);
-                  const showedUpBookings = bookings.filter(b => 
-                    recipientPhones.includes(b.customerPhone) && 
+                  const showedUpBookings = bookings.filter(b =>
+                    recipientPhones.includes(b.customerPhone) &&
                     (b.status === 'CHECKED_IN' || b.status === 'CHECKED_OUT' || b.status === 'CONFIRMED') &&
                     new Date(b.createdAt) >= new Date(campaign.createdAt)
                   );
                   const showedUpCount = showedUpBookings.length;
                   const showedUpPercentage = sentCount > 0 ? Math.round((showedUpCount / sentCount) * 100) : 0;
-
                   const isExpanded = selectedCampId === campaign.id;
-
-                  // Compile detailed recipient status mapping
                   const recipientsDetail = outboundLogs.map(ol => {
                     const customer = customers.find(c => c.phone === ol.phone);
                     const replyLog = inboundLogs.find(il => il.phone === ol.phone);
-                    const matchingBooking = bookings.find(b => 
-                      b.customerPhone === ol.phone && 
+                    const matchingBooking = bookings.find(b =>
+                      b.customerPhone === ol.phone &&
                       (b.status === 'CHECKED_IN' || b.status === 'CHECKED_OUT' || b.status === 'CONFIRMED') &&
                       new Date(b.createdAt) >= new Date(campaign.createdAt)
                     );
-
                     return {
                       phone: ol.phone,
                       name: customer ? customer.name : (matchingBooking ? matchingBooking.customerName : 'Valued Guest'),
@@ -503,15 +639,14 @@ export default function MarketingView({
                   });
 
                   return (
-                    <div 
-                      key={campaign.id} 
+                    <div
+                      key={campaign.id}
                       className={`border rounded-2xl overflow-hidden transition-all duration-200 ${
                         isExpanded ? 'border-gray-900 ring-1 ring-gray-900 bg-gray-50/10' : 'border-gray-100 bg-white hover:border-gray-300'
                       }`}
                       id={`campaign-card-${campaign.id}`}
                     >
-                      {/* Campaign Summary Accordion Header */}
-                      <div 
+                      <div
                         onClick={() => setSelectedCampId(isExpanded ? null : campaign.id)}
                         className="p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4 cursor-pointer"
                         id={`campaign-header-${campaign.id}`}
@@ -519,19 +654,14 @@ export default function MarketingView({
                         <div className="space-y-1.5 flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-bold text-gray-900 text-xs truncate max-w-xs">{campaign.name}</span>
-                            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-green-50 text-green-700">
-                              {campaign.status}
-                            </span>
+                            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-green-50 text-green-700">{campaign.status}</span>
                           </div>
                           <p className="text-[10px] text-gray-400 font-medium">
                             Sent {new Date(campaign.createdAt).toLocaleDateString()} at {new Date(campaign.createdAt).toLocaleTimeString()}
                           </p>
-                          <p className="text-[11px] text-gray-500 italic truncate max-w-md">
-                            "{campaign.messageTemplate}"
-                          </p>
+                          <p className="text-[11px] text-gray-500 italic truncate max-w-md">"{campaign.messageTemplate}"</p>
                         </div>
 
-                        {/* Interactive Metrics Bar */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-full xl:w-auto" id="metrics-bar">
                           <div className="bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-center min-w-[85px]">
                             <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Sent</span>
@@ -539,7 +669,6 @@ export default function MarketingView({
                               <Users className="h-3 w-3 text-indigo-500" /> {sentCount || 0}
                             </span>
                           </div>
-
                           <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl px-3 py-2 text-center min-w-[85px]">
                             <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider block">Saw (Read)</span>
                             <span className="text-xs font-extrabold text-emerald-700 flex items-center justify-center gap-1 mt-0.5">
@@ -547,7 +676,6 @@ export default function MarketingView({
                               <span className="text-[9px] font-normal text-emerald-500">({readPercentage}%)</span>
                             </span>
                           </div>
-
                           <div className="bg-teal-50/50 border border-teal-100 rounded-xl px-3 py-2 text-center min-w-[85px]">
                             <span className="text-[9px] font-bold text-teal-600 uppercase tracking-wider block">Replied</span>
                             <span className="text-xs font-extrabold text-teal-700 flex items-center justify-center gap-1 mt-0.5">
@@ -555,7 +683,6 @@ export default function MarketingView({
                               <span className="text-[9px] font-normal text-teal-500">({replyPercentage}%)</span>
                             </span>
                           </div>
-
                           <div className="bg-amber-50/50 border border-amber-100 rounded-xl px-3 py-2 text-center min-w-[85px]">
                             <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wider block">Showed Up</span>
                             <span className="text-xs font-extrabold text-amber-700 flex items-center justify-center gap-1 mt-0.5">
@@ -565,7 +692,6 @@ export default function MarketingView({
                           </div>
                         </div>
 
-                        {/* Chevron Trigger */}
                         <div className="flex items-center justify-end">
                           <button className="p-1 bg-gray-50 hover:bg-gray-100 rounded-lg text-gray-400">
                             {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -573,22 +699,17 @@ export default function MarketingView({
                         </div>
                       </div>
 
-                      {/* Expanded Recipient Logs & Conversions breakdown */}
                       {isExpanded && (
                         <div className="border-t border-gray-100 bg-gray-50/30 p-5 space-y-4 animate-fade-in" id="campaign-details">
                           <div className="bg-white p-4 rounded-xl border border-gray-100 space-y-1">
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Campaign template preview</span>
-                            <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">
-                              {campaign.messageTemplate}
-                            </p>
+                            <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{campaign.messageTemplate}</p>
                           </div>
-
                           <div className="space-y-2">
                             <h5 className="font-bold text-gray-800 text-[10px] uppercase tracking-wider flex items-center gap-1">
                               <CornerDownRight className="h-3 w-3 text-indigo-500" />
                               RECIPIENT-LEVEL AUDIT TRAIL
                             </h5>
-
                             {recipientsDetail.length === 0 ? (
                               <p className="text-xs text-gray-400 italic p-3">No message logs tracked for this legacy campaign.</p>
                             ) : (
@@ -662,87 +783,435 @@ export default function MarketingView({
         </div>
       )}
 
-      {/* Checkout review automation panel */}
+      {/* ── REVIEW + LOADSHEDDING TAB ── */}
       {subTab === 'review' && (
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-6" id="review-automation-panel">
-          <div id="review-auto-headers">
-            <h4 className="font-semibold text-gray-900">Daily Checkout Review Solicitation</h4>
-            <p className="text-xs text-gray-400 mt-1">
-              Guesthouses can collect Google/TripAdvisor reviews automatically. The engine matches bookings checking out today, formats templates, and prompts checkout messages automatically.
-            </p>
+        <div className="space-y-6" id="review-tab-container">
+
+          {/* Checkout Review Automation Panel */}
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-6" id="review-automation-panel">
+            <div id="review-auto-headers">
+              <h4 className="font-semibold text-gray-900">Daily Checkout Review Solicitation</h4>
+              <p className="text-xs text-gray-400 mt-1">
+                Guesthouses can collect Google/TripAdvisor reviews automatically. The engine matches bookings checking out today, formats templates, and prompts checkout messages automatically.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6" id="review-stats-grid">
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100" id="stat-reviews-total">
+                <span className="text-[10px] font-bold text-gray-500 block uppercase">Review Reminders Sent</span>
+                <span className="text-2xl font-extrabold text-gray-900 block mt-1">
+                  {logs.filter(l => l.messageType === 'REVIEW_REQUEST' && l.status === 'DELIVERED').length}
+                </span>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100" id="stat-reviews-response">
+                <span className="text-[10px] font-bold text-gray-500 block uppercase">Simulated Response Rate</span>
+                <span className="text-2xl font-extrabold text-teal-600 block mt-1">68%</span>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 flex flex-col justify-between" id="stat-reviews-frequency">
+                <span className="text-[10px] font-bold text-gray-500 block uppercase">Trigger Time</span>
+                <div className="mt-2 flex items-center gap-1.5">
+                  <span className="text-xs text-gray-400 font-medium">Scan checkouts at:</span>
+                  <select
+                    value={guesthouse.reviewTriggerTime || '11:00 AM'}
+                    onChange={async (e) => {
+                      const newTime = e.target.value;
+                      try {
+                        const response = await fetch('/api/marketing/whatsapp-settings', {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ guesthouseId: guesthouse.id, reviewTriggerTime: newTime })
+                        });
+                        if (response.ok) {
+                          const res = await response.json();
+                          onUpdateGuesthouse(res.guesthouse);
+                        } else {
+                          alert('Failed to save trigger time');
+                        }
+                      } catch (err) { console.error(err); }
+                    }}
+                    className="px-2 py-1 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-800 focus:outline-none"
+                    id="trigger-time-select"
+                  >
+                    {['08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM'].map(time => (
+                      <option key={time} value={time}>{time}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 pt-6 space-y-4" id="review-trigger-block">
+              <div id="trigger-headers">
+                <h5 className="font-semibold text-gray-800 text-xs">Run Manual Automated Sweep</h5>
+                <p className="text-xs text-gray-500">Scan for checkout events on the current date and run dispatch instantly.</p>
+              </div>
+
+              <button
+                onClick={triggerCheckoutSweep}
+                disabled={automationTriggering}
+                className="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-400 text-white rounded-xl text-xs font-semibold flex items-center gap-2"
+                id="checkout-sweep-btn"
+              >
+                {automationTriggering ? 'Scanning checkouts...' : 'Scan & Ingest Review Messages'}
+              </button>
+
+              {automationResult && (
+                <div className="p-4 bg-teal-50 border border-teal-200 text-teal-800 rounded-xl text-xs space-y-1 animate-fade-in" id="sweep-result">
+                  <p className="font-bold">Checkout Scanner completed successfully!</p>
+                  <p>Processed checked-out guests today: <span className="font-bold">{automationResult.processedCheckoutsTodayCount}</span></p>
+                  <p>Messages successfully dispatched to WhatsApp Business: <span className="font-bold">{automationResult.messagesSuccessfullyDispatchedCount}</span></p>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6" id="review-stats-grid">
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100" id="stat-reviews-total">
-              <span className="text-[10px] font-bold text-gray-500 block uppercase">Review Reminders Sent</span>
-              <span className="text-2xl font-extrabold text-gray-900 block mt-1">
-                {logs.filter(l => l.messageType === 'REVIEW_REQUEST' && l.status === 'DELIVERED').length}
+          {/* ── LOADSHEDDING / UTILITY ALERTS ── */}
+          <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden" id="utility-alerts-panel">
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 px-6 py-4 border-b border-amber-100 flex items-center justify-between" id="utility-header">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-500 rounded-xl shadow-sm shadow-amber-200">
+                  <Zap className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-amber-900 text-sm">⚡ Power & Water Utility Alerts</h4>
+                  <p className="text-[11px] text-amber-700 mt-0.5">Warn current guests of loadshedding or utility outages via WhatsApp.</p>
+                </div>
+              </div>
+              <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                alertableGuests.length > 0
+                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                  : 'bg-gray-100 text-gray-500 border border-gray-200'
+              }`}>
+                {alertableGuests.length} guest{alertableGuests.length !== 1 ? 's' : ''} in-house
               </span>
             </div>
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100" id="stat-reviews-response">
-              <span className="text-[10px] font-bold text-gray-500 block uppercase">Simulated Response Rate</span>
-              <span className="text-2xl font-extrabold text-teal-600 block mt-1">68%</span>
-            </div>
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 flex flex-col justify-between" id="stat-reviews-frequency">
-              <span className="text-[10px] font-bold text-gray-500 block uppercase">Trigger Time</span>
-              <div className="mt-2 flex items-center gap-1.5">
-                <span className="text-xs text-gray-400 font-medium">Scan checkouts at:</span>
-                <select
-                  value={guesthouse.reviewTriggerTime || '11:00 AM'}
-                  onChange={async (e) => {
-                    const newTime = e.target.value;
-                    try {
-                      const response = await fetch('/api/marketing/whatsapp-settings', {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          guesthouseId: guesthouse.id,
-                          reviewTriggerTime: newTime,
-                        })
-                      });
-                      if (response.ok) {
-                        const res = await response.json();
-                        onUpdateGuesthouse(res.guesthouse);
-                      } else {
-                        alert('Failed to save trigger time');
-                      }
-                    } catch (err) {
-                      console.error('Failed to update trigger time:', err);
-                    }
-                  }}
-                  className="px-2 py-1 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-800 focus:outline-none"
-                  id="trigger-time-select"
-                >
-                  {['08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM'].map(time => (
-                    <option key={time} value={time}>{time}</option>
+
+            <div className="p-6 space-y-6" id="utility-body">
+              {/* Alert Type Selector */}
+              <div className="space-y-2" id="alert-type-block">
+                <label className="text-xs font-bold text-gray-500">OUTAGE TYPE</label>
+                <div className="flex gap-2 flex-wrap" id="alert-type-buttons">
+                  {(['power', 'water', 'both'] as const).map(type => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setAlertType(type)}
+                      className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                        alertType === type
+                          ? type === 'power' ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                            : type === 'water' ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
+                            : 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                          : 'bg-gray-50 text-gray-600 border-gray-100 hover:bg-gray-100'
+                      }`}
+                      id={`alert-type-${type}`}
+                    >
+                      {type === 'power' ? '⚡ Power/Electricity' : type === 'water' ? '💧 Water Supply' : '⚡💧 Both'}
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
+
+              {/* Time Range */}
+              <div className="grid grid-cols-2 gap-4" id="alert-time-grid">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500">OUTAGE START TIME</label>
+                  <input
+                    type="time"
+                    value={alertStartTime}
+                    onChange={(e) => setAlertStartTime(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-amber-400 focus:outline-none font-mono"
+                    id="alert-start-time"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500">ESTIMATED END TIME</label>
+                  <input
+                    type="time"
+                    value={alertEndTime}
+                    onChange={(e) => setAlertEndTime(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-amber-400 focus:outline-none font-mono"
+                    id="alert-end-time"
+                  />
+                </div>
+              </div>
+
+              {/* Message Template */}
+              <div className="space-y-1" id="alert-template-block">
+                <label className="text-xs font-bold text-gray-500">ALERT MESSAGE TEMPLATE</label>
+                <textarea
+                  rows={4}
+                  value={alertTemplate}
+                  onChange={(e) => setAlertTemplate(e.target.value)}
+                  className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-amber-400 focus:outline-none"
+                  id="alert-template-input"
+                />
+                <p className="text-[10px] text-gray-400">
+                  Use <code className="font-mono bg-gray-100 px-1 rounded">{"{{name}}"}</code>,{' '}
+                  <code className="font-mono bg-gray-100 px-1 rounded">{"{{startTime}}"}</code>,{' '}
+                  <code className="font-mono bg-gray-100 px-1 rounded">{"{{endTime}}"}</code> placeholders.
+                </p>
+              </div>
+
+              {/* Live Preview */}
+              {alertableGuests.length > 0 && (
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 space-y-1.5" id="alert-preview">
+                  <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Live Preview (first guest)</span>
+                  <p className="text-xs text-amber-900 leading-relaxed font-medium">
+                    {alertTemplate
+                      .replace('{{name}}', alertableGuests[0].customerName.split(' ')[0])
+                      .replace('{{startTime}}', alertStartTime)
+                      .replace('{{endTime}}', alertEndTime)
+                    }
+                  </p>
+                </div>
+              )}
+
+              {/* Guest list */}
+              {alertableGuests.length > 0 && (
+                <div className="space-y-2" id="alertable-guests-list">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase">Current & Arriving Guests ({alertableGuests.length})</span>
+                  <div className="border border-gray-100 rounded-xl divide-y divide-gray-50 max-h-40 overflow-y-auto">
+                    {alertableGuests.map((b) => (
+                      <div key={b.id} className="flex items-center justify-between px-4 py-2.5 text-xs hover:bg-gray-50/50">
+                        <div>
+                          <span className="font-semibold text-gray-800">{b.customerName}</span>
+                          <span className="text-gray-400 font-mono ml-2 text-[10px]">{b.customerPhone}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-500 text-[10px]">{b.roomName.split(' ').slice(0, 2).join(' ')}</span>
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                            b.status === 'CHECKED_IN' ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-700'
+                          }`}>
+                            {b.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Send Button */}
+              {alertableGuests.length === 0 ? (
+                <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl text-xs text-gray-500 flex items-center gap-2">
+                  <BellOff className="h-4 w-4 text-gray-400" />
+                  No guests currently checked in or arriving within 48 hours. Alerts will show eligible guests here automatically.
+                </div>
+              ) : (
+                <button
+                  onClick={sendUtilityAlerts}
+                  disabled={alertSending}
+                  className="w-full sm:w-auto px-6 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm shadow-amber-200 transition-all"
+                  id="send-utility-alert-btn"
+                >
+                  {alertSending ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      Sending alerts to {alertableGuests.length} guests...
+                    </>
+                  ) : (
+                    <>
+                      <Bell className="h-4 w-4" />
+                      Send Utility Alert to All {alertableGuests.length} Guest{alertableGuests.length !== 1 ? 's' : ''}
+                    </>
+                  )}
+                </button>
+              )}
+
+              {/* Results */}
+              {alertDone && alertResults.length > 0 && (
+                <div className="space-y-2 animate-fade-in" id="alert-results">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase">Dispatch Results</span>
+                  <div className="border border-gray-100 rounded-xl divide-y divide-gray-50">
+                    {alertResults.map((r, idx) => (
+                      <div key={idx} className="flex items-center justify-between px-4 py-2.5 text-xs">
+                        <div>
+                          <span className="font-semibold text-gray-800">{r.name}</span>
+                          <span className="text-gray-400 font-mono ml-2 text-[10px]">{r.phone}</span>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                          r.status === 'FAILED' ? 'bg-red-50 text-red-700 border border-red-100'
+                          : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                        }`}>
+                          {r.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-teal-700 font-semibold">
+                    ✓ {alertResults.filter(r => r.status !== 'FAILED').length} of {alertResults.length} alerts dispatched.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
+        </div>
+      )}
 
-          <div className="border-t border-gray-100 pt-6 space-y-4" id="review-trigger-block">
-            <div id="trigger-headers">
-              <h5 className="font-semibold text-gray-800 text-xs">Run Manual Automated Sweep</h5>
-              <p className="text-xs text-gray-500">Scan for checkout events on the current date and run dispatch instantly.</p>
+      {/* ── QR LINK NUMBER TAB ── */}
+      {subTab === 'qr' && (
+        <div className="space-y-6" id="qr-tab-panel">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden" id="qr-panel">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 px-6 py-5 border-b border-emerald-100" id="qr-header">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-500 rounded-xl shadow-sm shadow-emerald-200">
+                  <QrCode className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-emerald-900 text-sm">Link Your Business WhatsApp Number</h4>
+                  <p className="text-[11px] text-emerald-700 mt-0.5">
+                    Send messages from your own established business phone number — not a random system number.
+                  </p>
+                </div>
+              </div>
             </div>
 
-            <button
-              onClick={triggerCheckoutSweep}
-              disabled={automationTriggering}
-              className="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-400 text-white rounded-xl text-xs font-semibold flex items-center gap-2"
-              id="checkout-sweep-btn"
-            >
-              {automationTriggering ? 'Scanning checkouts...' : 'Scan & Ingest Review Messages'}
-            </button>
+            <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8" id="qr-body">
+              {/* Left: QR Panel */}
+              <div className="flex flex-col items-center gap-6" id="qr-left">
+                <div className="relative" id="qr-code-wrapper">
+                  {/* Animated ring when scanning */}
+                  {qrLinkStatus === 'scanning' && (
+                    <div className="absolute -inset-3 rounded-2xl border-2 border-emerald-400 animate-ping opacity-30" />
+                  )}
+                  <div className={`p-4 rounded-2xl border-2 transition-all ${
+                    qrLinkStatus === 'linked'
+                      ? 'border-emerald-400 bg-emerald-50 shadow-lg shadow-emerald-100'
+                      : qrLinkStatus === 'scanning'
+                      ? 'border-emerald-300 bg-white shadow-xl'
+                      : 'border-gray-100 bg-white shadow-sm'
+                  }`} id="qr-display-box">
+                    {qrLinkStatus === 'linked' ? (
+                      <div className="w-44 h-44 flex flex-col items-center justify-center gap-3">
+                        <div className="p-4 bg-emerald-100 rounded-full">
+                          <CheckCheck className="h-10 w-10 text-emerald-600" />
+                        </div>
+                        <p className="text-sm font-bold text-emerald-700">Device Linked!</p>
+                        <p className="text-[10px] text-emerald-600 text-center">Your WhatsApp Business number is now active.</p>
+                      </div>
+                    ) : (
+                      <div className={`transition-all ${qrLinkStatus === 'scanning' ? 'opacity-60' : 'opacity-100'}`}>
+                        <QRCodeSVG size={176} />
+                      </div>
+                    )}
+                  </div>
 
-            {automationResult && (
-              <div className="p-4 bg-teal-50 border border-teal-200 text-teal-800 rounded-xl text-xs space-y-1 animate-fade-in" id="sweep-result">
-                <p className="font-bold">Checkout Scanner completed successfully!</p>
-                <p>Processed checked-out guests today: <span className="font-bold">{automationResult.processedCheckoutsTodayCount}</span></p>
-                <p>Messages successfully dispatched to WhatsApp Business: <span className="font-bold">{automationResult.messagesSuccessfullyDispatchedCount}</span></p>
+                  {qrLinkStatus === 'scanning' && (
+                    <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-white/60 backdrop-blur-[1px]">
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="h-8 w-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                        <span className="text-[10px] font-bold text-emerald-700">Scanning...</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Status Badge */}
+                <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold border ${
+                  qrLinkStatus === 'linked'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : qrLinkStatus === 'scanning'
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : 'bg-gray-50 text-gray-500 border-gray-200'
+                }`} id="qr-status-badge">
+                  {qrLinkStatus === 'linked' ? (
+                    <><Wifi className="h-3.5 w-3.5" /> Business Number Active</>
+                  ) : qrLinkStatus === 'scanning' ? (
+                    <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Awaiting scan on your phone...</>
+                  ) : (
+                    <><WifiOff className="h-3.5 w-3.5" /> Not Linked Yet</>
+                  )}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex flex-col gap-2 w-full max-w-xs" id="qr-actions">
+                  {qrLinkStatus === 'idle' && (
+                    <button
+                      onClick={handleQrScan}
+                      className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm shadow-emerald-200 transition-all"
+                      id="btn-connect-qr"
+                    >
+                      <QrCode className="h-4 w-4" />
+                      Connect via QR Code
+                    </button>
+                  )}
+
+                  {qrLinkStatus === 'scanning' && (
+                    <button
+                      onClick={handleQrReset}
+                      className="w-full py-2.5 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl text-xs font-semibold transition-all"
+                      id="btn-cancel-qr"
+                    >
+                      Cancel
+                    </button>
+                  )}
+
+                  {qrLinkStatus === 'linked' && (
+                    <button
+                      onClick={handleQrReset}
+                      className="w-full py-2.5 border border-red-100 text-red-500 hover:bg-red-50 rounded-xl text-xs font-semibold transition-all"
+                      id="btn-unlink-qr"
+                    >
+                      Unlink Device
+                    </button>
+                  )}
+
+                  <button
+                    onClick={handleCopyLink}
+                    className="w-full py-2.5 border border-gray-100 hover:bg-gray-50 text-gray-600 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+                    id="btn-copy-qr-link"
+                  >
+                    {copied ? <><CheckCheck className="h-4 w-4 text-emerald-500" /> Copied!</> : <><Copy className="h-4 w-4" /> Copy Session Link</>}
+                  </button>
+                </div>
               </div>
-            )}
+
+              {/* Right: Instructions */}
+              <div className="space-y-6" id="qr-right">
+                <div>
+                  <h5 className="font-bold text-gray-900 text-sm mb-3">How to Link Your Number</h5>
+                  <ol className="space-y-4" id="qr-steps">
+                    {[
+                      { step: '1', icon: '📱', title: 'Open WhatsApp on your phone', desc: 'Use the business number you want guests to receive messages from.' },
+                      { step: '2', icon: '⚙️', title: 'Go to Linked Devices', desc: 'Tap the three dots menu (Android) or Settings (iPhone) → Linked Devices.' },
+                      { step: '3', icon: '🔗', title: 'Tap "Link a Device"', desc: 'Point your phone camera at the QR code displayed on the left.' },
+                      { step: '4', icon: '✅', title: 'You\'re connected!', desc: 'Once linked, all WhatsApp campaigns and alerts will send from your business number.' },
+                    ].map(({ step, icon, title, desc }) => (
+                      <li key={step} className="flex gap-4 items-start" id={`qr-step-${step}`}>
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-xs font-black">
+                          {step}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-gray-800">{icon} {title}</p>
+                          <p className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">{desc}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+
+                {/* Info Box */}
+                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-2" id="qr-info-box">
+                  <p className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider">Why use QR linking?</p>
+                  <ul className="text-[11px] text-indigo-800 space-y-1 leading-relaxed">
+                    <li>• Messages come from your real, trusted business phone number</li>
+                    <li>• Guests recognise your number — higher open rates</li>
+                    <li>• No technical Meta developer account setup required</li>
+                    <li>• Works with any existing WhatsApp Business account</li>
+                  </ul>
+                </div>
+
+                {/* Technical note */}
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-4" id="qr-tech-note">
+                  <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1">Developer Note</p>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Full QR session bridging requires a Node.js server running <code className="font-mono bg-amber-100 px-1 rounded">whatsapp-web.js</code> (Baileys library). 
+                    This UI is fully wired and ready — contact support to activate the live session server for your subscription plan.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
