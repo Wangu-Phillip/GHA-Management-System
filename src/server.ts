@@ -68,7 +68,7 @@ app.get('/api/health', async (c) => {
   return c.json({
     status: 'ok',
     dbConnected,
-    mode: dbConnected ? 'SQLITE_D1_EDGE' : 'LOCAL_DEMO_STATE',
+    mode: dbConnected ? 'LIVE' : 'DEMO',
     timestamp: new Date().toISOString(),
     contextTenantId: c.var.tenantId,
   });
