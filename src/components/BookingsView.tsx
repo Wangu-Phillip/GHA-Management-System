@@ -74,7 +74,7 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
         body: JSON.stringify({ guesthouseId, rooms: updatedRooms }),
       });
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as any;
         onUpdateGuesthouse(data.guesthouse);
         setNewRoomInput('');
       } else {
@@ -97,7 +97,7 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
         body: JSON.stringify({ guesthouseId, rooms: updatedRooms }),
       });
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as any;
         onUpdateGuesthouse(data.guesthouse);
       } else {
         alert('Failed to delete room');
@@ -195,7 +195,7 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
         });
         await onRefresh();
       } else {
-        const err = await response.json();
+        const err = (await response.json()) as any;
         alert(err.error || 'Failed to schedule booking');
       }
     } catch (err) {

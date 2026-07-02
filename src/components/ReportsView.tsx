@@ -16,7 +16,7 @@ export default function ReportsView({ guesthouseId }: ReportsProps) {
     try {
       const response = await fetch(`/api/reports/compiled?guesthouseId=${guesthouseId}&days=${days}`);
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as any;
         setReport(data);
       }
     } catch (err) {
@@ -88,7 +88,9 @@ export default function ReportsView({ guesthouseId }: ReportsProps) {
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm" id="rep-kpi-adr">
           <div className="flex items-center gap-1" id="rep-adr-meta">
             <span className="text-[10px] font-bold text-gray-500 block uppercase tracking-wider">Average Daily Rate (ADR)</span>
-            <HelpCircle className="h-3 w-3 text-gray-400" title="Average Revenue collected per occupied room per day" />
+            <span title="Average Revenue collected per occupied room per day">
+              <HelpCircle className="h-3 w-3 text-gray-400" />
+            </span>
           </div>
           <span className="text-2xl font-black text-gray-900 mt-1 block">P{report.summary.averageDailyRate.toFixed(2)}</span>
           <span className="text-[10px] text-gray-400 font-medium block mt-1">Average nightly rate paid</span>
@@ -97,7 +99,9 @@ export default function ReportsView({ guesthouseId }: ReportsProps) {
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm" id="rep-kpi-revpar">
           <div className="flex items-center gap-1" id="rep-revpar-meta">
             <span className="text-[10px] font-bold text-gray-500 block uppercase tracking-wider">RevPAR</span>
-            <HelpCircle className="h-3 w-3 text-gray-400" title="Revenue Per Available Room" />
+            <span title="Revenue Per Available Room">
+              <HelpCircle className="h-3 w-3 text-gray-400" />
+            </span>
           </div>
           <span className="text-2xl font-black text-teal-600 mt-1 block">P{report.summary.revenuePerAvailableRoom.toFixed(2)}</span>
           <span className="text-[10px] text-gray-400 font-medium block mt-1">Total revenue / total available rooms</span>

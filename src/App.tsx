@@ -154,7 +154,7 @@ export default function App() {
     try {
       const res = await fetch('/api/health');
       if (res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as any;
         setDbConnected(data.dbConnected);
         setDbMode(data.mode);
       }
@@ -196,12 +196,12 @@ export default function App() {
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as any;
         setUser(data.user);
         setGuesthouse(data.guesthouse);
         setActiveTab(data.user.role === 'SUPER_ADMIN' ? 'super-admin' : 'overview');
       } else {
-        const data = await response.json();
+        const data = (await response.json()) as any;
         setLoginError(data.error || 'Invalid credentials');
       }
     } catch (err) {
@@ -226,12 +226,12 @@ export default function App() {
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as any;
         setUser(data.user);
         setGuesthouse(data.guesthouse);
         setActiveTab(data.user.role === 'SUPER_ADMIN' ? 'super-admin' : 'overview');
       } else {
-        const data = await response.json();
+        const data = (await response.json()) as any;
         setLoginError(data.error || 'Preset login failed');
       }
     } catch (err) {

@@ -24,13 +24,15 @@ interface SettingsViewProps {
   currentUser: UserType;
   onUpdateGuesthouse: (gh: Guesthouse) => void;
   onLogout: () => void;
+  onRefresh?: () => Promise<void>;
 }
 
 export default function SettingsView({ 
   guesthouse, 
   currentUser, 
   onUpdateGuesthouse, 
-  onLogout 
+  onLogout,
+  onRefresh
 }: SettingsViewProps) {
   // Guesthouse Details State
   const [ghName, setGhName] = useState(guesthouse.name);
@@ -64,13 +66,42 @@ export default function SettingsView({
   const [confirmDeleteName, setConfirmDeleteName] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
 
+  // Clear demo/dummy data state
+  const [clearingDemo, setClearingDemo] = useState(false);
+
+  const handleClearDemoData = async () => {
+    if (!confirm('Are you sure you want to clear all dummy/seeded bookings, customers, campaigns, message logs, and mock Facebook campaign history from this workspace? Real entries will be preserved.')) {
+      return;
+    }
+    setClearingDemo(true);
+    try {
+      const response = await fetch('/api/marketing/clear-dummy-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guesthouseId: guesthouse.id })
+      });
+      if (response.ok) {
+        if (onRefresh) await onRefresh();
+        alert('All seeded dummy demo data has been cleared from this workspace successfully!');
+      } else {
+        const err = await response.json() as any;
+        alert(err.error || 'Failed to clear demo data.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error connecting to API to clear demo data.');
+    } finally {
+      setClearingDemo(false);
+    }
+  };
+
   // Load Employees
   const fetchEmployees = async () => {
     setLoadingEmployees(true);
     try {
       const response = await fetch(`/api/employees?guesthouseId=${guesthouse.id}`);
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as any;
         setEmployees(data);
       }
     } catch (err) {
@@ -103,11 +134,11 @@ export default function SettingsView({
         })
       });
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as any;
         onUpdateGuesthouse(data.guesthouse);
         setGhMessage({ type: 'success', text: 'Guesthouse details updated successfully!' });
       } else {
-        const err = await response.json();
+        const err = (await response.json()) as any;
         setGhMessage({ type: 'error', text: err.error || 'Failed to update details' });
       }
     } catch (err) {
@@ -148,7 +179,7 @@ export default function SettingsView({
         setEmpMessage({ type: 'success', text: 'Team member added successfully!' });
         await fetchEmployees();
       } else {
-        const err = await response.json();
+        const err = (await response.json()) as any;
         setEmpMessage({ type: 'error', text: err.error || 'Failed to add team member' });
       }
     } catch (err) {
@@ -184,7 +215,7 @@ export default function SettingsView({
         setEditingEmpId(null);
         await fetchEmployees();
       } else {
-        const err = await response.json();
+        const err = (await response.json()) as any;
         alert(err.error || 'Failed to update employee details');
       }
     } catch (err) {
@@ -206,7 +237,7 @@ export default function SettingsView({
       if (response.ok) {
         await fetchEmployees();
       } else {
-        const err = await response.json();
+        const err = (await response.json()) as any;
         alert(err.error || 'Failed to delete team member');
       }
     } catch (err) {
@@ -229,7 +260,7 @@ export default function SettingsView({
         })
       });
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as any;
         onUpdateGuesthouse(data.guesthouse);
         alert('Your premium subscription has been cancelled. You will continue to have premium benefits until the end of your cycle.');
       } else {
@@ -627,6 +658,34 @@ export default function SettingsView({
                   Your premium subscription has been scheduled for cancellation. Features will remain active until your billing cycle concludes.
                 </div>
               )}
+            </div>
+          </section>
+
+          {/* Demo Data Operations */}
+          <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden" id="demo-ops-card">
+            <div className="p-6 border-b border-gray-50 bg-gray-50/50 flex items-center gap-3">
+              <div className="p-2 bg-amber-50 text-amber-600 rounded-xl border border-amber-100">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-gray-900">Demo Data Operations</h3>
+                <p className="text-[10px] text-gray-500">Purge simulated records from your workspace.</p>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4" id="demo-ops-body">
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Clear all pre-seeded bookings, guest records, campaigns, message logs, and mock Facebook ad history. Use this to reset your workspace once real API keys are connected. Real entries will be preserved.
+              </p>
+              <button
+                type="button"
+                onClick={handleClearDemoData}
+                disabled={clearingDemo}
+                className="w-full py-2.5 bg-amber-50 hover:bg-amber-100/75 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                id="clear-demo-btn"
+              >
+                {clearingDemo ? 'Clearing Workspace...' : 'Clear Seeded Demo Data'}
+              </button>
             </div>
           </section>
 

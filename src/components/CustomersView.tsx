@@ -91,7 +91,7 @@ export default function CustomersView({ customers, guesthouseId, onRefresh }: Cu
         setFormData({ name: '', email: '', phone: '', customerCountry: 'Botswana (local)', optInPromo: true, gender: '', ageGroup: '', groupStyle: '' });
         await onRefresh();
       } else {
-        const err = await response.json();
+        const err = (await response.json()) as any;
         alert(err.error || 'Failed to onboard customer profile');
       }
     } catch (err) {
@@ -134,7 +134,7 @@ export default function CustomersView({ customers, guesthouseId, onRefresh }: Cu
         setEditingCustomer(null);
         await onRefresh();
       } else {
-        const err = await response.json();
+        const err = (await response.json()) as any;
         alert(err.error || 'Failed to update customer profile');
       }
     } catch (err) {
@@ -152,7 +152,7 @@ export default function CustomersView({ customers, guesthouseId, onRefresh }: Cu
       if (response.ok) {
         await onRefresh();
       } else {
-        const err = await response.json();
+        const err = (await response.json()) as any;
         alert(err.error || 'Failed to delete customer registry entry');
       }
     } catch (err) {

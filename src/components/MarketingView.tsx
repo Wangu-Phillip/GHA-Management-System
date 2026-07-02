@@ -359,7 +359,7 @@ export default function MarketingView({
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as any;
         onUpdateGuesthouse(data.guesthouse);
         setSaveStatus(true);
         setTimeout(() => setSaveStatus(false), 2000);
@@ -955,7 +955,7 @@ export default function MarketingView({
                           body: JSON.stringify({ guesthouseId: guesthouse.id, reviewTriggerTime: newTime })
                         });
                         if (response.ok) {
-                          const res = await response.json();
+                          const res = (await response.json()) as any;
                           onUpdateGuesthouse(res.guesthouse);
                         } else {
                           alert('Failed to save trigger time');

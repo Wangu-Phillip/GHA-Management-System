@@ -60,19 +60,26 @@ export async function buildAdvisorContext(
   since.setDate(since.getDate() - windowDays);
   const sinceStr = since.toISOString().split('T')[0];
 
-  // Fetch insights within window (campaign-level)
+  // Find the active connected Facebook Ad Account
+  const account = await (prisma as any).facebookAdAccount.findUnique({
+    where: { guesthouseId },
+  });
+  const adAccountId = account?.adAccountId || 'act_demo';
+
+  // Fetch insights within window (campaign-level) matching the active adAccountId
   const insights = await (prisma as any).facebookInsight.findMany({
     where: {
       guesthouseId,
+      adAccountId,
       objectLevel: 'CAMPAIGN',
       date: { gte: sinceStr },
     },
     orderBy: { date: 'asc' },
   });
 
-  // Fetch campaigns
+  // Fetch campaigns matching the active adAccountId
   const campaigns = await (prisma as any).facebookCampaign.findMany({
-    where: { guesthouseId },
+    where: { guesthouseId, adAccountId },
   });
 
   // Aggregate per-campaign totals

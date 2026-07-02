@@ -556,6 +556,78 @@ app.post('/api/marketing/whatsapp-send', async (c) => {
   }
 });
 
+// Helper to clear seeded mock/dummy data when real keys are applied
+async function performClearDummyData(prisma: any, guesthouseId: string) {
+  // Delete mock MessageLogs (IDs: msg-1, msg-2, etc. or IDs starting with mock-)
+  await prisma.messageLog.deleteMany({
+    where: {
+      guesthouseId,
+      OR: [
+        { id: { in: ['msg-1', 'msg-2', 'msg-2-reply', 'msg-3', 'msg-4', 'msg-5'] } },
+        { id: { startsWith: 'mock-msg-' } }
+      ]
+    }
+  });
+
+  // Delete mock Campaigns
+  await prisma.campaign.deleteMany({
+    where: {
+      guesthouseId,
+      id: { in: ['camp-1', 'camp-2'] }
+    }
+  });
+
+  // Delete mock Bookings
+  await prisma.booking.deleteMany({
+    where: {
+      guesthouseId,
+      id: { in: ['booking-1', 'booking-2', 'booking-3', 'booking-4', 'booking-5'] }
+    }
+  });
+
+  // Delete mock Customers
+  await prisma.customer.deleteMany({
+    where: {
+      guesthouseId,
+      id: { in: ['cust-1', 'cust-2', 'cust-3', 'cust-4'] }
+    }
+  });
+
+  // Delete mock Facebook Campaigns & Insights under 'act_demo'
+  await prisma.facebookCampaign.deleteMany({
+    where: {
+      guesthouseId,
+      OR: [
+        { adAccountId: 'act_demo' },
+        { id: { startsWith: 'mock-' } }
+      ]
+    }
+  });
+
+  await prisma.facebookInsight.deleteMany({
+    where: {
+      guesthouseId,
+      adAccountId: 'act_demo'
+    }
+  });
+
+  // Clear AI Advisor Cache for this guesthouse so advice is regenerated fresh using real data
+  await prisma.aiAdvisorCache.deleteMany({
+    where: { guesthouseId }
+  });
+}
+
+app.post('/api/marketing/clear-dummy-data', async (c) => {
+  try {
+    const { guesthouseId } = await c.req.json();
+    if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
+    await performClearDummyData(c.var.prisma, guesthouseId);
+    return c.json({ message: 'Dummy demo data cleared successfully from D1' });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 app.put('/api/marketing/whatsapp-settings', async (c) => {
   try {
     const { guesthouseId, whatsappPhoneId, whatsappToken, whatsappBusinessId, rooms, reviewTriggerTime } =
@@ -568,7 +640,16 @@ app.put('/api/marketing/whatsapp-settings', async (c) => {
     };
     if (rooms) data.rooms = Array.isArray(rooms) ? JSON.stringify(rooms) : rooms;
     if (reviewTriggerTime) data.reviewTriggerTime = reviewTriggerTime;
+    
     const updated = await c.var.prisma.guesthouse.update({ where: { id: guesthouseId }, data });
+
+    // Auto-clear dummy data if real WhatsApp keys are applied
+    const hasRealKeys = whatsappPhoneId && whatsappToken && whatsappToken !== 'EAAGb0ZC...';
+    if (hasRealKeys) {
+      console.log(`[WhatsApp Settings] Real keys applied for ${guesthouseId}. Clearing dummy/seeded records.`);
+      await performClearDummyData(c.var.prisma, guesthouseId);
+    }
+
     return c.json({
       message: 'Guesthouse marketing settings and custom properties updated successfully',
       guesthouse: updated,
@@ -991,6 +1072,14 @@ app.put('/api/facebook/account', async (c) => {
       create: { guesthouseId, adAccountId, accessToken, pageId, accountName, currency, timezone },
       update: { adAccountId, accessToken, pageId, accountName, currency, timezone, updatedAt: new Date() },
     });
+
+    // Auto-clear dummy data if real Facebook keys are applied
+    const hasRealKeys = accessToken && accessToken !== 'DEMO_MODE';
+    if (hasRealKeys) {
+      console.log(`[Facebook Settings] Real keys applied for ${guesthouseId}. Clearing dummy/seeded records.`);
+      await performClearDummyData(c.var.prisma, guesthouseId);
+    }
+
     return c.json({ message: 'Ad account connected successfully', account });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);

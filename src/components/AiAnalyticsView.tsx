@@ -18,7 +18,7 @@ export default function AiAnalyticsView({ guesthouseId, onNavigateToCampaign }: 
     try {
       const response = await fetch(`/api/analytics/ai-forecast?guesthouseId=${guesthouseId}`);
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as any;
         setInsights(data);
       }
     } catch (err) {
