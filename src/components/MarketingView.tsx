@@ -127,13 +127,81 @@ export default function MarketingView({
 
   // ── QR Linking State ──────────────────────────────────────────────────────────
   const [qrLinkStatus, setQrLinkStatus] = useState<'idle' | 'scanning' | 'linked'>('idle');
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const QR_SESSION_URL = 'https://web.whatsapp.com/?session=gha-business-link';
 
-  const handleQrScan = () => {
+  // Check initial connection status on mount / tab navigation
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const res = await fetch(`https://us-central1-gha-management.cloudfunctions.net/getSessionStatus?guesthouseId=${guesthouseId}`);
+        if (res.ok) {
+          const data = await res.json() as any;
+          if (data.status === 'LINKED') {
+            setQrLinkStatus('linked');
+            setQrCodeUrl(null);
+          } else if (data.status === 'AWAITING_SCAN') {
+            setQrLinkStatus('scanning');
+            setQrCodeUrl(data.qrCodeDataUrl);
+          } else {
+            setQrLinkStatus('idle');
+            setQrCodeUrl(null);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching session status:', err);
+      }
+    };
+    checkStatus();
+  }, [guesthouseId, subTab]);
+
+  // Poll for connection open status if in scanning mode
+  useEffect(() => {
+    if (qrLinkStatus !== 'scanning') return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        const res = await fetch(`https://us-central1-gha-management.cloudfunctions.net/getSessionStatus?guesthouseId=${guesthouseId}`);
+        if (res.ok) {
+          const data = await res.json() as any;
+          if (data.status === 'LINKED') {
+            setQrLinkStatus('linked');
+            setQrCodeUrl(null);
+            clearInterval(intervalId);
+          } else if (data.status === 'UNLINKED' || data.status === 'FAILED') {
+            setQrLinkStatus('idle');
+            setQrCodeUrl(null);
+            clearInterval(intervalId);
+          } else if (data.status === 'AWAITING_SCAN' && data.qrCodeDataUrl) {
+            setQrCodeUrl(data.qrCodeDataUrl);
+          }
+        }
+      } catch (err) {
+        console.error('Error polling session status:', err);
+      }
+    }, 3000);
+
+    return () => clearInterval(intervalId);
+  }, [qrLinkStatus, guesthouseId]);
+
+  const handleQrScan = async () => {
     setQrLinkStatus('scanning');
-    // Simulate linking after 4 seconds
-    setTimeout(() => setQrLinkStatus('linked'), 4000);
+    setQrCodeUrl(null);
+    try {
+      const res = await fetch(`https://us-central1-gha-management.cloudfunctions.net/getQrCode?guesthouseId=${guesthouseId}`);
+      if (res.ok) {
+        const data = await res.json() as any;
+        setQrCodeUrl(data.qrCodeDataUrl);
+      } else {
+        setQrLinkStatus('idle');
+        alert('Failed to retrieve QR code session. Try again.');
+      }
+    } catch (err) {
+      console.error(err);
+      setQrLinkStatus('idle');
+      alert('Connection error initiating QR scan.');
+    }
   };
 
   const handleCopyLink = () => {
@@ -142,7 +210,10 @@ export default function MarketingView({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleQrReset = () => setQrLinkStatus('idle');
+  const handleQrReset = () => {
+    setQrLinkStatus('idle');
+    setQrCodeUrl(null);
+  };
 
   // ── Loadshedding / Utility Alert State ───────────────────────────────────────
   const checkedInGuests = bookings.filter(b => b.status === 'CHECKED_IN' || b.status === 'CONFIRMED');
@@ -1152,8 +1223,12 @@ export default function MarketingView({
                         <p className="text-[10px] text-emerald-600 text-center">Your WhatsApp Business number is now active.</p>
                       </div>
                     ) : (
-                      <div className={`transition-all ${qrLinkStatus === 'scanning' ? 'opacity-60' : 'opacity-100'}`}>
-                        <QRCodeSVG size={176} />
+                      <div className={`w-44 h-44 flex items-center justify-center transition-all ${qrLinkStatus === 'scanning' ? 'opacity-60' : 'opacity-100'}`}>
+                        {qrCodeUrl ? (
+                          <img src={qrCodeUrl} alt="WhatsApp Web QR Code" className="w-40 h-40 animate-fade-in" />
+                        ) : (
+                          <QRCodeSVG size={176} />
+                        )}
                       </div>
                     )}
                   </div>

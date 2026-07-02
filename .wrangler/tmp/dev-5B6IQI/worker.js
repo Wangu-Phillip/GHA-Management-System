@@ -8031,13 +8031,13 @@ var require_default2 = __commonJS({
   }
 });
 
-// .wrangler/tmp/bundle-WxYSdF/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-H96DQg/middleware-loader.entry.ts
 init_modules_watch_stub();
 init_virtual_unenv_global_polyfill_cloudflare_unenv_preset_node_process();
 init_virtual_unenv_global_polyfill_cloudflare_unenv_preset_node_console();
 init_performance2();
 
-// .wrangler/tmp/bundle-WxYSdF/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-H96DQg/middleware-insertion-facade.js
 init_modules_watch_stub();
 init_virtual_unenv_global_polyfill_cloudflare_unenv_preset_node_process();
 init_virtual_unenv_global_polyfill_cloudflare_unenv_preset_node_console();
@@ -11969,6 +11969,70 @@ async function sendWhatsAppMessage(prisma, params) {
   const { guesthouseId, phone, content, messageType, bookingId, campaignId, config: config2 } = params;
   const messageId = `wa-msg-${Date.now()}-${Math.floor(Math.random() * 1e4)}`;
   const normalizedPhone = phone.replace(/[\s\-\+]/g, "");
+  let isQrLinked = false;
+  try {
+    const statusRes = await fetch(
+      `https://us-central1-gha-management.cloudfunctions.net/getSessionStatus?guesthouseId=${guesthouseId}`
+    );
+    if (statusRes.ok) {
+      const statusData = await statusRes.json();
+      if (statusData.status === "LINKED") {
+        isQrLinked = true;
+      }
+    }
+  } catch (err) {
+    console.error(`Failed to check Firebase WhatsApp session status: ${err}`);
+  }
+  if (isQrLinked) {
+    try {
+      const response = await fetch("https://us-central1-gha-management.cloudfunctions.net/sendMessage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          guesthouseId,
+          phone: normalizedPhone,
+          content
+        })
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        await prisma.messageLog.create({
+          data: {
+            guesthouseId,
+            bookingId,
+            campaignId,
+            phone,
+            direction: "OUTBOUND",
+            messageType,
+            content,
+            status: "DELIVERED"
+          }
+        });
+        return {
+          success: true,
+          messageId: data.messageId || messageId,
+          status: "DELIVERED",
+          contentSent: content
+        };
+      }
+      throw new Error(data.error || "Firebase Cloud Function dispatch failure");
+    } catch (err) {
+      console.error(`Firebase WhatsApp dispatch failed: ${err.message}`);
+      await prisma.messageLog.create({
+        data: {
+          guesthouseId,
+          bookingId,
+          campaignId,
+          phone,
+          direction: "OUTBOUND",
+          messageType,
+          content,
+          status: "FAILED"
+        }
+      });
+      return { success: false, messageId, status: "FAILED", contentSent: content };
+    }
+  }
   if (config2 && config2.phoneId && config2.token && config2.token !== "EAAGb0ZC...") {
     try {
       const url = `https://graph.facebook.com/v18.0/${config2.phoneId}/messages`;
@@ -13791,7 +13855,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env2, _ctx, middlewareCtx
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-WxYSdF/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-H96DQg/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -13827,7 +13891,7 @@ function __facade_invoke__(request, env2, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-WxYSdF/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-H96DQg/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

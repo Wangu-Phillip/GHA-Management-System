@@ -27,7 +27,75 @@ export async function sendWhatsAppMessage(
 
   const normalizedPhone = phone.replace(/[\s\-\+]/g, '');
 
-  // Real Meta Cloud API path.
+  // 1. Check if Custom QR Device is linked in Firebase Cloud Functions
+  let isQrLinked = false;
+  try {
+    const statusRes = await fetch(
+      `https://us-central1-gha-management.cloudfunctions.net/getSessionStatus?guesthouseId=${guesthouseId}`
+    );
+    if (statusRes.ok) {
+      const statusData: any = await statusRes.json();
+      if (statusData.status === 'LINKED') {
+        isQrLinked = true;
+      }
+    }
+  } catch (err) {
+    console.error(`Failed to check Firebase WhatsApp session status: ${err}`);
+  }
+
+  if (isQrLinked) {
+    try {
+      const response = await fetch('https://us-central1-gha-management.cloudfunctions.net/sendMessage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          guesthouseId,
+          phone: normalizedPhone,
+          content
+        })
+      });
+
+      const data: any = await response.json();
+      if (response.ok && data.success) {
+        await prisma.messageLog.create({
+          data: {
+            guesthouseId,
+            bookingId,
+            campaignId,
+            phone,
+            direction: 'OUTBOUND',
+            messageType,
+            content,
+            status: 'DELIVERED',
+          },
+        });
+        return {
+          success: true,
+          messageId: data.messageId || messageId,
+          status: 'DELIVERED',
+          contentSent: content,
+        };
+      }
+      throw new Error(data.error || 'Firebase Cloud Function dispatch failure');
+    } catch (err: any) {
+      console.error(`Firebase WhatsApp dispatch failed: ${err.message}`);
+      await prisma.messageLog.create({
+        data: {
+          guesthouseId,
+          bookingId,
+          campaignId,
+          phone,
+          direction: 'OUTBOUND',
+          messageType,
+          content,
+          status: 'FAILED',
+        },
+      });
+      return { success: false, messageId, status: 'FAILED', contentSent: content };
+    }
+  }
+
+  // 2. Real Meta Cloud API path.
   if (config && config.phoneId && config.token && config.token !== 'EAAGb0ZC...') {
     try {
       const url = `https://graph.facebook.com/v18.0/${config.phoneId}/messages`;
