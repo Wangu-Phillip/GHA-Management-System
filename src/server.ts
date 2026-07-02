@@ -584,6 +584,16 @@ app.post('/api/marketing/whatsapp-send', async (c) => {
       bookingId,
       config: waConfig,
     });
+
+    if (messageType === 'REVIEW_REQUEST' && bookingId) {
+      await (c.var.prisma as any).booking.update({
+        where: { id: bookingId },
+        data: {
+          reviewMessageStatus: result.success ? 'SENT' : 'FAILED',
+        },
+      });
+    }
+
     return c.json(result);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -830,6 +840,24 @@ app.post('/api/webhooks/whatsapp', async (c) => {
               status: 'READ',
             },
           });
+
+          // Check if the reply is a response to a checkout review request
+          if (outboundRef && outboundRef.messageType === 'REVIEW_REQUEST' && outboundRef.bookingId) {
+            console.log(`[Webhook Review] Inbound reply to REVIEW_REQUEST on booking ${outboundRef.bookingId}`);
+            const ratingMatch = msgText.match(/\b([1-5])\b/) || msgText.match(/([1-5])/);
+            const reviewRating = ratingMatch ? parseInt(ratingMatch[1], 10) : null;
+            const reviewFeedback = msgText.trim();
+
+            await (prisma as any).booking.update({
+              where: { id: outboundRef.bookingId },
+              data: {
+                reviewCollected: true,
+                reviewRating,
+                reviewFeedback,
+              },
+            });
+            console.log(`[Webhook Review] Ingested review rating: ${reviewRating}, feedback: "${reviewFeedback.substring(0, 50)}..."`);
+          }
 
           // ── 3. Showed Up / Conversion detection ────────────────────────────
           // Detect positive intent keywords in the reply

@@ -66,6 +66,8 @@ model Booking {
   notes               String?
   reviewCollected     Boolean      @default(false)
   reviewMessageStatus String       @default("PENDING")
+  reviewRating        Int?
+  reviewFeedback      String?
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 

@@ -106,22 +106,8 @@ export async function sendWhatsAppMessage(
         to: normalizedPhone,
       };
 
-      if (messageType === 'REVIEW_REQUEST') {
-        payload.type = 'template';
-        payload.template = {
-          name: 'checkout_feedback',
-          language: { code: 'en_US' },
-          components: [
-            {
-              type: 'body',
-              parameters: [{ type: 'text', text: content.substring(0, 100) }],
-            },
-          ],
-        };
-      } else {
-        payload.type = 'text';
-        payload.text = { preview_url: true, body: content };
-      }
+      payload.type = 'text';
+      payload.text = { preview_url: true, body: content };
 
       const response = await fetch(url, {
         method: 'POST',
@@ -294,8 +280,7 @@ export async function runCheckoutReviewAutomation(
 
   for (const b of eligible) {
     processed++;
-    const slug = guesthouse.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const reviewContent = `Hi ${b.customerName}! Thank you for staying at ${guesthouse.name}. Please take 30 seconds to share your review: https://g.page/${slug}/review`;
+    const reviewContent = `Hi ${b.customerName}! Thank you for choosing to stay at ${guesthouse.name}. On a scale of 1 to 5, how would you rate your stay? (Please reply with a number from 1 to 5, followed by any feedback you would like to share).`;
 
     const result = await sendWhatsAppMessage(prisma, {
       guesthouseId,

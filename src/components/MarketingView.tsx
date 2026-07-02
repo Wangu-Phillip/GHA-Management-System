@@ -1008,20 +1008,22 @@ export default function MarketingView({
             <div id="review-auto-headers">
               <h4 className="font-semibold text-gray-900">Daily Checkout Review Solicitation</h4>
               <p className="text-xs text-gray-400 mt-1">
-                Guesthouses can collect Google/TripAdvisor reviews automatically. The engine matches bookings checking out today, formats templates, and prompts checkout messages automatically.
+                Collect reviews directly from guest WhatsApp numbers. The engine scans bookings checking out on the current date, delivers a rating solicitation, and logs their direct replies automatically.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6" id="review-stats-grid">
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-100" id="stat-reviews-total">
-                <span className="text-[10px] font-bold text-gray-500 block uppercase">Review Reminders Sent</span>
+                <span className="text-[10px] font-bold text-gray-500 block uppercase">Review Requests Sent</span>
                 <span className="text-2xl font-extrabold text-gray-900 block mt-1">
-                  {logs.filter(l => l.messageType === 'REVIEW_REQUEST' && l.status === 'DELIVERED').length}
+                  {logs.filter((l: any) => l.messageType === 'REVIEW_REQUEST').length}
                 </span>
               </div>
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-100" id="stat-reviews-response">
-                <span className="text-[10px] font-bold text-gray-500 block uppercase">Simulated Response Rate</span>
-                <span className="text-2xl font-extrabold text-teal-600 block mt-1">68%</span>
+                <span className="text-[10px] font-bold text-gray-500 block uppercase">Reviews Collected</span>
+                <span className="text-2xl font-extrabold text-teal-600 block mt-1">
+                  {bookings.filter((b: any) => b.reviewCollected).length}
+                </span>
               </div>
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 flex flex-col justify-between" id="stat-reviews-frequency">
                 <span className="text-[10px] font-bold text-gray-500 block uppercase">Trigger Time</span>
@@ -1078,6 +1080,48 @@ export default function MarketingView({
                   <p>Messages successfully dispatched to WhatsApp Business: <span className="font-bold">{automationResult.messagesSuccessfullyDispatchedCount}</span></p>
                 </div>
               )}
+            </div>
+
+            {/* Direct WhatsApp Reviews List */}
+            <div className="border-t border-gray-100 pt-6 space-y-4" id="direct-reviews-list-block">
+              <div>
+                <h5 className="font-semibold text-gray-800 text-xs">Direct WhatsApp Reviews Ingested</h5>
+                <p className="text-[11px] text-gray-400">Direct rating and feedback replies matched and stored from customer numbers.</p>
+              </div>
+
+              <div className="space-y-3" id="direct-reviews-container">
+                {bookings.filter((b: any) => b.reviewCollected).length > 0 ? (
+                  bookings.filter((b: any) => b.reviewCollected).map((b: any) => (
+                    <div key={b.id} className="p-4 bg-gray-50 border border-gray-100 rounded-xl space-y-2 text-xs" id={`review-card-${b.id}`}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-gray-800">{b.customerName}</span>
+                          <span className="text-[10px] text-gray-400 block mt-0.5">{b.roomName}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {b.reviewRating ? (
+                            Array.from({ length: 5 }).map((_, i) => (
+                              <span key={i} className={`text-sm ${i < b.reviewRating ? 'text-amber-400' : 'text-gray-200'}`}>★</span>
+                            ))
+                          ) : (
+                            <span className="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded font-semibold uppercase">No Star Rating</span>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-gray-600 italic bg-white p-2.5 rounded-lg border border-gray-100/50 leading-relaxed font-serif">
+                        "{b.reviewFeedback || 'No feedback comments provided.'}"
+                      </p>
+                      <div className="text-[9px] text-gray-400 font-mono text-right">
+                        Received: {new Date(b.updatedAt || b.checkOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-6 border border-dashed border-gray-200 rounded-xl text-center text-xs text-gray-400" id="no-reviews-placeholder">
+                    No direct WhatsApp reviews ingested yet. Reviews are collected dynamically when guests reply to checkout messages.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

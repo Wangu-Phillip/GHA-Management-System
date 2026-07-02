@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Calendar, PlusCircle, Search, Upload, CheckCircle2, Trash2, ArrowUpRight, HelpCircle, Settings, X, ChevronLeft, ChevronRight, LayoutList } from 'lucide-react';
+import { Calendar, PlusCircle, Search, Upload, CheckCircle2, Trash2, ArrowUpRight, HelpCircle, Settings, X, ChevronLeft, ChevronRight, LayoutList, MessageSquare } from 'lucide-react';
 import { Booking, Guesthouse } from '../types';
 import ConfirmationModal from './ConfirmationModal';
 
@@ -65,7 +65,10 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
     message: '',
     onConfirm: () => {}
   });
-
+  // Checkout Review Solicitation modal states
+  const [reviewBooking, setReviewBooking] = useState<Booking | null>(null);
+  const [reviewMsgText, setReviewMsgText] = useState('');
+  const [sendingReview, setSendingReview] = useState(false);
   // D1/SQLite stores JSON as a string — parse it safely before use
   const parseRooms = (raw: any): string[] => {
     if (!raw) return [];
@@ -253,6 +256,43 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
         }
       }
     });
+  };
+
+  // Manual review invite handlers
+  const handleOpenReviewModal = (b: Booking) => {
+    setReviewBooking(b);
+    setReviewMsgText(`Hi ${b.customerName.split(' ')[0]}! Thank you for choosing to stay at ${guesthouse.name}. On a scale of 1 to 5, how would you rate your stay? (Please reply with a number from 1 to 5, followed by any feedback you would like to share).`);
+  };
+
+  const handleSendReviewMessage = async () => {
+    if (!reviewBooking) return;
+    setSendingReview(true);
+    try {
+      const response = await fetch('/api/marketing/whatsapp-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          guesthouseId,
+          phone: reviewBooking.customerPhone,
+          content: reviewMsgText,
+          messageType: 'REVIEW_REQUEST',
+          bookingId: reviewBooking.id
+        })
+      });
+      if (response.ok) {
+        await onRefresh();
+        alert('Review invitation sent successfully!');
+      } else {
+        const err = (await response.json()) as any;
+        alert(err.error || 'Failed to send review invite.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error connecting to Express server.');
+    } finally {
+      setSendingReview(false);
+      setReviewBooking(null);
+    }
   };
 
   // Drag and drop events
@@ -695,7 +735,15 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
                           {b.reviewMessageStatus}
                         </span>
                       </td>
-                      <td className="p-4 text-right">
+                      <td className="p-4 text-right flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => handleOpenReviewModal(b)}
+                          className="text-gray-400 hover:text-teal-600 transition-colors p-1"
+                          id={`send-review-btn-${b.id}`}
+                          title="Send Review Invite via WhatsApp"
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                        </button>
                         <button
                           onClick={() => deleteBooking(b.id)}
                           className="text-gray-400 hover:text-red-600 transition-colors p-1"
@@ -1064,6 +1112,65 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
         onConfirm={confirmConfig.onConfirm}
         onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
       />
+
+      {reviewBooking && (
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in animate-duration-200" id="review-modal">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 relative flex flex-col gap-4 animate-scale-in" id="review-modal-content">
+            <button 
+              onClick={() => setReviewBooking(null)}
+              className="absolute top-4 right-4 p-1.5 hover:bg-gray-100 rounded-xl text-gray-400 transition-colors"
+              id="close-review-modal"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="space-y-1">
+              <h4 className="font-extrabold text-sm text-gray-900">Send WhatsApp Review Invite</h4>
+              <p className="text-[11px] text-gray-500">
+                Customize the checkout review or questionnaire message for <strong>{reviewBooking.customerName}</strong>.
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-gray-400 block uppercase">Recipient Number</span>
+              <span className="text-xs font-mono font-bold text-gray-700 bg-gray-50 px-2.5 py-1.5 rounded-lg border border-gray-100 block">
+                {reviewBooking.customerPhone}
+              </span>
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-gray-400 block uppercase">Custom Review Message</span>
+              <textarea
+                value={reviewMsgText}
+                onChange={(e) => setReviewMsgText(e.target.value)}
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none leading-relaxed"
+                id="review-message-textarea"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2 border-t border-gray-50">
+              <button
+                type="button"
+                onClick={() => setReviewBooking(null)}
+                className="px-4 py-2 border border-gray-100 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                id="cancel-review-send"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSendReviewMessage}
+                disabled={sendingReview || !reviewMsgText.trim()}
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-400 text-white rounded-xl text-xs font-semibold shadow-sm flex items-center gap-1.5"
+                id="confirm-review-send"
+              >
+                {sendingReview ? 'Sending...' : 'Send Invite'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

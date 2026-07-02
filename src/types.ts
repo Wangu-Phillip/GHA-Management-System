@@ -38,6 +38,8 @@ export interface Booking {
   totalAmount: number;
   reviewCollected: boolean;
   reviewMessageStatus: 'PENDING' | 'SENT' | 'FAILED' | 'NO_OPT_IN';
+  reviewRating?: number | null;
+  reviewFeedback?: string | null;
   createdAt: string;
   updatedAt: string;
 }
