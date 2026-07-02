@@ -4,7 +4,7 @@ import {
   Send, Settings, Sparkles, MessageSquare, ShieldAlert, History, Key,
   CheckCircle, RefreshCw, Smartphone, Users, Check, ChevronDown, ChevronUp,
   MessageCircle, AlertCircle, Eye, CornerDownRight, QrCode, Zap, Wifi,
-  WifiOff, Copy, CheckCheck, Bell, BellOff
+  WifiOff, Copy, CheckCheck, Bell, BellOff, Trash2
 } from 'lucide-react';
 
 interface MarketingProps {
@@ -114,7 +114,15 @@ export default function MarketingView({
   const [phoneId, setPhoneId] = useState(guesthouse.whatsappPhoneId || '');
   const [token, setToken] = useState(guesthouse.whatsappToken || '');
   const [businessId, setBusinessId] = useState(guesthouse.whatsappBusinessId || '');
+  const [allowLogDeletion, setAllowLogDeletion] = useState(guesthouse.allowLogDeletion || false);
   const [saveStatus, setSaveStatus] = useState(false);
+
+  useEffect(() => {
+    setPhoneId(guesthouse.whatsappPhoneId || '');
+    setToken(guesthouse.whatsappToken || '');
+    setBusinessId(guesthouse.whatsappBusinessId || '');
+    setAllowLogDeletion(guesthouse.allowLogDeletion || false);
+  }, [guesthouse]);
 
   // Automation states
   const [automationTriggering, setAutomationTriggering] = useState(false);
@@ -354,7 +362,8 @@ export default function MarketingView({
           guesthouseId,
           whatsappPhoneId: phoneId,
           whatsappToken: token,
-          whatsappBusinessId: businessId
+          whatsappBusinessId: businessId,
+          allowLogDeletion
         })
       });
 
@@ -367,6 +376,45 @@ export default function MarketingView({
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleDeleteCampaign = async (campaignId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to delete this campaign? This will remove the campaign record and its stats.')) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/marketing/campaigns/${campaignId}?guesthouseId=${guesthouseId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        await onRefresh();
+      } else {
+        const err = (await res.json()) as any;
+        alert(err.error || 'Failed to delete campaign');
+      }
+    } catch {
+      alert('Error connecting to Express server');
+    }
+  };
+
+  const handleDeleteLog = async (logId: string) => {
+    if (!confirm('Are you sure you want to delete this message log audit entry? This cannot be undone.')) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/marketing/whatsapp-logs/${logId}?guesthouseId=${guesthouseId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        await onRefresh();
+      } else {
+        const err = (await res.json()) as any;
+        alert(err.error || 'Failed to delete log entry');
+      }
+    } catch {
+      alert('Error connecting to Express server');
     }
   };
 
@@ -825,7 +873,18 @@ export default function MarketingView({
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-end">
+                        <div className="flex items-center gap-1.5 justify-end">
+                          {guesthouse.allowLogDeletion && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteCampaign(campaign.id, e)}
+                              className="p-1 bg-red-50 hover:bg-red-100 rounded-lg text-red-500 transition-colors"
+                              title="Delete campaign"
+                              id={`delete-camp-btn-${campaign.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
                           <button className="p-1 bg-gray-50 hover:bg-gray-100 rounded-lg text-gray-400">
                             {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                           </button>
@@ -1490,6 +1549,7 @@ export default function MarketingView({
                   <th className="p-3">Content</th>
                   <th className="p-3">Direction</th>
                   <th className="p-3">Status</th>
+                  {guesthouse.allowLogDeletion && <th className="p-3 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50" id="logs-table-body">
@@ -1532,11 +1592,24 @@ export default function MarketingView({
                           {l.status}
                         </span>
                       </td>
+                      {guesthouse.allowLogDeletion && (
+                        <td className="p-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteLog(l.id)}
+                            className="p-1 bg-red-50 hover:bg-red-100 rounded-lg text-red-500 transition-colors"
+                            title="Delete log entry"
+                            id={`delete-log-btn-${l.id}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="p-12 text-center text-gray-400">
+                    <td colSpan={guesthouse.allowLogDeletion ? 7 : 6} className="p-12 text-center text-gray-400">
                       No communications logged. Launch a broadcast campaign or send sandbox tests to audit messages.
                     </td>
                   </tr>
@@ -1596,6 +1669,31 @@ export default function MarketingView({
                 onChange={(e) => setBusinessId(e.target.value)}
                 className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none font-mono"
               />
+            </div>
+
+            {/* Toggle delete logs permission */}
+            <div className="border-t border-gray-100 pt-4 space-y-4" id="log-delete-control-section">
+              <div className="flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-100" id="field-allow-log-delete">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900">
+                    <Trash2 className="h-4 w-4 text-red-500" />
+                    <span>ALLOW CAMPAIGN & AUDIT LOG DELETION</span>
+                  </div>
+                  <p className="text-[10px] text-gray-500 max-w-sm">
+                    Allow authorized workspace managers to delete completed campaigns and WhatsApp message logs.
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={allowLogDeletion}
+                    onChange={(e) => setAllowLogDeletion(e.target.checked)}
+                    className="sr-only peer"
+                    id="allow-log-delete-toggle"
+                  />
+                  <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-500"></div>
+                </label>
+              </div>
             </div>
 
             <button

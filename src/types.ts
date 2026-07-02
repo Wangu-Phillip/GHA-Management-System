@@ -11,6 +11,7 @@ export interface Guesthouse {
   rooms?: string[];
   reviewTriggerTime?: string;
   logoUrl?: string;
+  allowLogDeletion: boolean;
   createdAt: string;
   updatedAt: string;
 }

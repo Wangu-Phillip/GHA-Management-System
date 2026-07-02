@@ -505,6 +505,40 @@ app.get('/api/marketing/whatsapp-logs', async (c) => {
   }
 });
 
+app.delete('/api/marketing/campaigns/:id', async (c) => {
+  const id = c.req.param('id');
+  const guesthouseId = c.req.query('guesthouseId');
+  if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
+  try {
+    const gh = await c.var.prisma.guesthouse.findUnique({ where: { id: guesthouseId } });
+    if (!gh) return c.json({ error: 'Guesthouse not found' }, 404);
+    if (!gh.allowLogDeletion) {
+      return c.json({ error: 'Campaign and log deletion is disabled by the Guesthouse Administrator.' }, 403);
+    }
+    const deleted = await c.var.prisma.campaign.delete({ where: { id } });
+    return c.json({ message: 'Campaign deleted successfully', deleted });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+app.delete('/api/marketing/whatsapp-logs/:id', async (c) => {
+  const id = c.req.param('id');
+  const guesthouseId = c.req.query('guesthouseId');
+  if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
+  try {
+    const gh = await c.var.prisma.guesthouse.findUnique({ where: { id: guesthouseId } });
+    if (!gh) return c.json({ error: 'Guesthouse not found' }, 404);
+    if (!gh.allowLogDeletion) {
+      return c.json({ error: 'Campaign and log deletion is disabled by the Guesthouse Administrator.' }, 403);
+    }
+    const deleted = await c.var.prisma.messageLog.delete({ where: { id } });
+    return c.json({ message: 'WhatsApp message log audit entry deleted successfully', deleted });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 app.post('/api/marketing/campaigns', async (c) => {
   try {
     const { guesthouseId, campaignName, messageTemplate, customerIds } = await c.req.json();
@@ -630,7 +664,7 @@ app.post('/api/marketing/clear-dummy-data', async (c) => {
 
 app.put('/api/marketing/whatsapp-settings', async (c) => {
   try {
-    const { guesthouseId, whatsappPhoneId, whatsappToken, whatsappBusinessId, rooms, reviewTriggerTime } =
+    const { guesthouseId, whatsappPhoneId, whatsappToken, whatsappBusinessId, rooms, reviewTriggerTime, allowLogDeletion } =
       await c.req.json();
     if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
     const data: any = {
@@ -640,6 +674,7 @@ app.put('/api/marketing/whatsapp-settings', async (c) => {
     };
     if (rooms) data.rooms = Array.isArray(rooms) ? JSON.stringify(rooms) : rooms;
     if (reviewTriggerTime) data.reviewTriggerTime = reviewTriggerTime;
+    if (typeof allowLogDeletion === 'boolean') data.allowLogDeletion = allowLogDeletion;
     
     const updated = await c.var.prisma.guesthouse.update({ where: { id: guesthouseId }, data });
 
