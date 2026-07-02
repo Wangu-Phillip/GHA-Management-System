@@ -340,8 +340,8 @@ export default function App() {
           <div className="inline-flex p-3 bg-gray-900 rounded-2xl text-white shadow-md mx-auto" id="logo-icon-bg">
             <Bed className="h-6 w-6" />
           </div>
-          <h2 className="text-2xl font-black text-gray-900 tracking-tight" id="login-brand-title">Guesthouse SaaS Workspace</h2>
-          <p className="text-xs text-gray-400">Relational multi-tenant dashboard with AI analytical pipelines and WhatsApp integrations.</p>
+          <h2 className="text-2xl font-black text-gray-900 tracking-tight" id="login-brand-title">Oidaq Workspace</h2>
+          <p className="text-xs text-gray-400">Powerful dashboard with AI analytical pipelines, Facebook, and WhatsApp integrations.</p>
         </div>
 
         <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md" id="login-form-card">
@@ -456,8 +456,8 @@ export default function App() {
               <Bed className="h-5 w-5" />
             </div>
             <div>
-              <span className="font-black text-xs tracking-wider block">GUESTHOUSE SaaS</span>
-              <span className="text-[9px] text-gray-400 font-mono tracking-tight uppercase">V1.0.0 Relational</span>
+              <span className="font-black text-2xl tracking-wider block">Oidaq</span>
+              <span className="text-[9px] text-gray-400 font-mono tracking-tight uppercase">V1.0.0</span>
             </div>
           </div>
 
