@@ -371,3 +371,90 @@ export const getPairingCode = onRequest({ cors: true }, async (req, res) => {
     }
   }
 });
+
+// ── FIREBASE AUTH MANAGEMENT FUNCTIONS ───────────────────────────────────────
+
+export const createTenantAdmin = onRequest({ cors: true }, async (req, res) => {
+  try {
+    const { email, password, name, role, guesthouseId } = req.body;
+    if (!email || !password || !name || !role) {
+      res.status(400).json({ error: 'email, password, name, and role are required' });
+      return;
+    }
+
+    const userRecord = await admin.auth().createUser({
+      email,
+      password,
+      displayName: name,
+    });
+
+    await admin.auth().setCustomUserClaims(userRecord.uid, {
+      role,
+      guesthouseId: guesthouseId || null,
+    });
+
+    res.status(200).json({
+      uid: userRecord.uid,
+      email: userRecord.email,
+      displayName: userRecord.displayName,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export const deleteTenantAdmin = onRequest({ cors: true }, async (req, res) => {
+  try {
+    const { uid } = req.body;
+    if (!uid) {
+      res.status(400).json({ error: 'uid is required' });
+      return;
+    }
+
+    await admin.auth().deleteUser(uid);
+    res.status(200).json({ success: true, message: 'User deleted from Firebase Auth' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export const resetTenantUserPassword = onRequest({ cors: true }, async (req, res) => {
+  try {
+    const { uid, email, newPassword } = req.body;
+    if (!uid && !email) {
+      res.status(400).json({ error: 'Either uid or email is required' });
+      return;
+    }
+
+    if (newPassword) {
+      const targetUid = uid || (await admin.auth().getUserByEmail(email)).uid;
+      await admin.auth().updateUser(targetUid, { password: newPassword });
+      res.status(200).json({ success: true, message: 'Password updated successfully' });
+    } else {
+      const targetEmail = email || (await admin.auth().getUser(uid)).email;
+      if (!targetEmail) {
+        res.status(400).json({ error: 'User does not have an email address' });
+        return;
+      }
+      const link = await admin.auth().generatePasswordResetLink(targetEmail);
+      res.status(200).json({ success: true, resetLink: link, email: targetEmail });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export const setSuperAdminClaim = onRequest({ cors: true }, async (req, res) => {
+  try {
+    const { uid } = req.body;
+    if (!uid) {
+      res.status(400).json({ error: 'uid is required' });
+      return;
+    }
+
+    await admin.auth().setCustomUserClaims(uid, { role: 'SUPER_ADMIN', guesthouseId: null });
+    res.status(200).json({ success: true, message: 'Custom claims set to SUPER_ADMIN' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});

@@ -193,14 +193,27 @@ export default function FacebookAdsView({ guesthouseId }: Props) {
     e.preventDefault();
     setConnectLoading(true);
     setConnectMsg('');
+
+    const normalizedId = formAdAccountId.trim();
+    if (!/^\d+$/.test(normalizedId)) {
+      setConnectMsg('Invalid Ad Account ID. It must consist only of numbers (from Meta Business Manager).');
+      setConnectLoading(false);
+      return;
+    }
+    if (formToken.length < 20) {
+      setConnectMsg('Access Token appears too short. Please use a valid System User Token from Meta Business Manager.');
+      setConnectLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/facebook/account', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           guesthouseId,
-          adAccountId: formAdAccountId,
-          accessToken: formToken || 'DEMO_MODE',
+          adAccountId: normalizedId,
+          accessToken: formToken,
           pageId: formPageId,
           accountName: formAccountName,
         }),
@@ -220,6 +233,7 @@ export default function FacebookAdsView({ guesthouseId }: Props) {
       setConnectLoading(false);
     }
   };
+
 
   const handleCreateCampaign = async (e: React.FormEvent) => {
     e.preventDefault();

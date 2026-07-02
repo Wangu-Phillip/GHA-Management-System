@@ -1,5 +1,12 @@
 export type Role = 'SUPER_ADMIN' | 'TENANT_ADMIN' | 'TENANT_SALES';
 
+export interface TenantFeatureFlags {
+  facebookAds: boolean;
+  whatsappMarketing: boolean;
+  aiForecasts: boolean;
+  linkWhatsappNumber: boolean;
+}
+
 export interface Guesthouse {
   id: string;
   name: string;
@@ -12,6 +19,9 @@ export interface Guesthouse {
   reviewTriggerTime?: string;
   logoUrl?: string;
   allowLogDeletion: boolean;
+  isBlocked: boolean;
+  isPaused: boolean;
+  featureFlags: TenantFeatureFlags;
   createdAt: string;
   updatedAt: string;
 }
@@ -22,6 +32,18 @@ export interface User {
   name: string;
   role: Role;
   guesthouseId: string | null;
+  firebaseUid?: string;
+}
+
+export interface SubscriptionHistoryEntry {
+  id: string;
+  guesthouseId: string;
+  changedBy: string;
+  previousStatus: string;
+  newStatus: string;
+  subscriptionEndsAt?: string;
+  notes?: string;
+  createdAt: string;
 }
 
 export interface Booking {

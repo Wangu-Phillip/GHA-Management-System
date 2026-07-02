@@ -22,6 +22,9 @@ model Guesthouse {
   reviewTriggerTime   String?
   logoUrl             String?
   allowLogDeletion    Boolean      @default(false)
+  isBlocked           Boolean      @default(false)
+  isPaused            Boolean      @default(false)
+  featureFlags        String       @default("{\"facebookAds\":true,\"whatsappMarketing\":true,\"aiForecasts\":true,\"linkWhatsappNumber\":true}")
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
@@ -36,6 +39,7 @@ model Guesthouse {
   facebookAds         FacebookAd[]
   facebookInsights    FacebookInsight[]
   aiAdvisorCaches     AiAdvisorCache[]
+  subscriptionHistories SubscriptionHistory[]
 }
 
 model User {
@@ -46,8 +50,23 @@ model User {
   role         String      @default("TENANT_SALES")
   guesthouseId String?
   guesthouse   Guesthouse? @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
+  firebaseUid  String?     @unique
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+}
+
+model SubscriptionHistory {
+  id                 String     @id @default(uuid())
+  guesthouseId       String
+  guesthouse         Guesthouse @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
+  changedBy          String
+  previousStatus     String
+  newStatus          String
+  subscriptionEndsAt DateTime?
+  notes              String?
+  createdAt          DateTime   @default(now())
+
+  @@index([guesthouseId])
 }
 
 model Booking {

@@ -33,6 +33,7 @@ import AiAnalyticsView from './components/AiAnalyticsView';
 import SuperAdminView from './components/SuperAdminView';
 import SettingsView from './components/SettingsView';
 import FacebookAdsView from './components/FacebookAdsView';
+import SuperAdminSettingsView from './components/SuperAdminSettingsView';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -55,6 +56,13 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+
+  // Forgot Password flow states
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotMsg, setForgotMsg] = useState('');
+  const [forgotError, setForgotError] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   // Global Toast / popup notification state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -83,10 +91,20 @@ export default function App() {
       showToast(message, isSuccess ? 'success' : 'error');
     };
 
-    // Override window.fetch to automatically trigger success toasts for mutations!
+    // Override window.fetch to automatically trigger success toasts for mutations and inject auth token!
     const originalFetch = window.fetch;
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-      const response = await originalFetch(input, init);
+      const token = sessionStorage.getItem('gha_auth_token');
+      const updatedInit = { ...init };
+      if (token) {
+        const headers = new Headers(init?.headers || {});
+        if (!headers.has('Authorization')) {
+          headers.set('Authorization', `Bearer ${token}`);
+        }
+        updatedInit.headers = headers;
+      }
+      
+      const response = await originalFetch(input, updatedInit);
       
       const method = (init?.method || 'GET').toUpperCase();
       const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
@@ -135,12 +153,16 @@ export default function App() {
       const cRes = await fetch(`/api/customers?guesthouseId=${targetGuesthouseId}`);
       const lRes = await fetch(`/api/marketing/whatsapp-logs?guesthouseId=${targetGuesthouseId}`);
       const campRes = await fetch(`/api/marketing/campaigns?guesthouseId=${targetGuesthouseId}`);
+      const gRes = await fetch(`/api/guesthouse?guesthouseId=${targetGuesthouseId}`);
       
       if (bRes.ok && cRes.ok && lRes.ok && campRes.ok) {
         setBookings(await bRes.json());
         setCustomers(await cRes.json());
         setLogs(await lRes.json());
         setCampaigns(await campRes.json());
+      }
+      if (gRes.ok) {
+        setGuesthouse(await gRes.json());
       }
     } catch (err) {
       console.error('Network synchronization error', err);
@@ -197,6 +219,9 @@ export default function App() {
 
       if (response.ok) {
         const data = (await response.json()) as any;
+        if (data.token) {
+          sessionStorage.setItem('gha_auth_token', data.token);
+        }
         setUser(data.user);
         setGuesthouse(data.guesthouse);
         setActiveTab(data.user.role === 'SUPER_ADMIN' ? 'super-admin' : 'overview');
@@ -208,6 +233,33 @@ export default function App() {
       setLoginError('Error connecting to backend API');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotMsg('');
+    setForgotError('');
+    setForgotLoading(true);
+
+    try {
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+
+      const data = await response.json() as any;
+      if (response.ok) {
+        setForgotMsg(data.message || 'Password reset email triggered successfully.');
+        setForgotEmail('');
+      } else {
+        setForgotError(data.error || 'Failed to trigger password reset.');
+      }
+    } catch (err) {
+      setForgotError('Error connecting to backend API');
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -227,6 +279,9 @@ export default function App() {
 
       if (response.ok) {
         const data = (await response.json()) as any;
+        if (data.token) {
+          sessionStorage.setItem('gha_auth_token', data.token);
+        }
         setUser(data.user);
         setGuesthouse(data.guesthouse);
         setActiveTab(data.user.role === 'SUPER_ADMIN' ? 'super-admin' : 'overview');
@@ -242,6 +297,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    sessionStorage.removeItem('gha_auth_token');
     setUser(null);
     setGuesthouse(null);
     setBookings([]);
@@ -346,48 +402,112 @@ export default function App() {
 
         <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md" id="login-form-card">
           <div className="bg-white py-8 px-6 border border-gray-100 rounded-3xl shadow-xl space-y-6">
-            <form className="space-y-4" onSubmit={handleLoginSubmit} id="login-form">
-              <div className="space-y-1" id="login-email-field">
-                <label htmlFor="email" className="text-xs font-bold text-gray-500 uppercase">Email Address</label>
-                <input
-                  id="email"
-                  type="email"
-                  required
-                  placeholder="e.g. sarah@pinecrest.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
-                />
-              </div>
-
-              <div className="space-y-1" id="login-pass-field">
-                <label htmlFor="password" className="text-xs font-bold text-gray-500 uppercase">Password</label>
-                <input
-                  id="password"
-                  type="password"
-                  required
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
-                />
-              </div>
-
-              {loginError && (
-                <div className="text-xs text-red-600 bg-red-50 p-3 rounded-xl border border-red-100" id="login-error-alert">
-                  {loginError}
+            {showForgotPassword ? (
+              <form className="space-y-4" onSubmit={handleForgotPasswordSubmit} id="forgot-password-form">
+                <h3 className="text-sm font-bold text-gray-900">Reset Your Password</h3>
+                <p className="text-xs text-gray-400">Enter your registered email address below, and we will send a password reset link to your inbox.</p>
+                
+                <div className="space-y-1" id="forgot-email-field">
+                  <label htmlFor="forgot-email" className="text-xs font-bold text-gray-500 uppercase">Email Address</label>
+                  <input
+                    id="forgot-email"
+                    type="email"
+                    required
+                    placeholder="e.g. sarah@pinecrest.com"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
+                  />
                 </div>
-              )}
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 px-4 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-500 text-white rounded-xl text-xs font-semibold shadow transition-colors flex items-center justify-center gap-2"
-                id="login-btn"
-              >
-                {loading ? 'Authenticating...' : 'Sign In'}
-              </button>
-            </form>
+                {forgotMsg && (
+                  <div className="text-xs text-emerald-600 bg-emerald-50 p-3 rounded-xl border border-emerald-100" id="forgot-success-alert">
+                    {forgotMsg}
+                  </div>
+                )}
+
+                {forgotError && (
+                  <div className="text-xs text-red-600 bg-red-50 p-3 rounded-xl border border-red-100" id="forgot-error-alert">
+                    {forgotError}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={forgotLoading}
+                  className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-400 text-white rounded-xl text-xs font-semibold shadow transition-colors flex items-center justify-center gap-2"
+                  id="forgot-btn"
+                >
+                  {forgotLoading ? 'Sending Email...' : 'Send Reset Link'}
+                </button>
+
+                <div className="text-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowForgotPassword(false);
+                      setForgotMsg('');
+                      setForgotError('');
+                    }}
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                  >
+                    Back to Sign In
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form className="space-y-4" onSubmit={handleLoginSubmit} id="login-form">
+                <div className="space-y-1" id="login-email-field">
+                  <label htmlFor="email" className="text-xs font-bold text-gray-500 uppercase">Email Address</label>
+                  <input
+                    id="email"
+                    type="email"
+                    required
+                    placeholder="e.g. sarah@pinecrest.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1" id="login-pass-field">
+                  <div className="flex justify-between items-center">
+                    <label htmlFor="password" className="text-xs font-bold text-gray-500 uppercase">Password</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotPassword(true)}
+                      className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
+                  <input
+                    id="password"
+                    type="password"
+                    required
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
+                  />
+                </div>
+
+                {loginError && (
+                  <div className="text-xs text-red-600 bg-red-50 p-3 rounded-xl border border-red-100" id="login-error-alert">
+                    {loginError}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-3 px-4 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-500 text-white rounded-xl text-xs font-semibold shadow transition-colors flex items-center justify-center gap-2"
+                  id="login-btn"
+                >
+                  {loading ? 'Authenticating...' : 'Sign In'}
+                </button>
+              </form>
+            )}
 
             <div className="relative flex py-2 items-center" id="divider">
               <div className="flex-grow border-t border-gray-100"></div>
@@ -444,6 +564,39 @@ export default function App() {
     );
   }
 
+  const isTenantLockout = user && user.role !== 'SUPER_ADMIN' && guesthouse && (guesthouse.isBlocked || guesthouse.isPaused);
+
+  if (isTenantLockout) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex flex-col justify-center items-center py-12 px-4 sm:px-6 lg:px-8 font-sans antialiased text-white text-center">
+        <div className="max-w-md w-full space-y-6 bg-gray-900 border border-gray-800 p-8 rounded-3xl shadow-2xl">
+          <div className="inline-flex p-4 bg-red-950/50 rounded-2xl text-red-500 border border-red-900/50 mx-auto">
+            <Lock className="h-10 w-10 animate-pulse" />
+          </div>
+          <h2 className="text-2xl font-black tracking-tight text-red-400">Portal Access Restricted</h2>
+          <p className="text-xs text-gray-400 leading-relaxed">
+            Your guesthouse portal subscription is currently {guesthouse.isBlocked ? 'Blocked' : 'Paused'}. 
+            All automated integrations, bookings workflows, and AI engines have been halted.
+          </p>
+          <div className="bg-gray-950 p-4 rounded-xl border border-gray-800 text-left text-[11px] space-y-2 text-gray-400">
+            <div><span className="font-bold text-gray-300">Guesthouse:</span> {guesthouse.name}</div>
+            <div><span className="font-bold text-gray-300">Tenant ID:</span> {guesthouse.id}</div>
+            <div><span className="font-bold text-gray-300">Status:</span> {guesthouse.isBlocked ? 'SUSPENDED' : 'PAUSED'}</div>
+            <div><span className="font-bold text-gray-300">Reason:</span> Subscription expired or suspended by SaaS Overseer.</div>
+          </div>
+          <p className="text-[10px] text-gray-500">Please contact the platform administrator to restore your account status.</p>
+          <button
+            onClick={handleLogout}
+            className="w-full py-2.5 px-4 bg-gray-800 hover:bg-gray-700 text-white rounded-xl text-xs font-semibold shadow transition-colors"
+          >
+            Log Out of Workspace
+          </button>
+        </div>
+        {renderToast()}
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="h-screen bg-gray-50 flex font-sans text-gray-800 antialiased overflow-hidden" id="dashboard-container">
@@ -489,27 +642,31 @@ export default function App() {
                   Bookings Log
                 </button>
 
-                <button
-                  onClick={() => setActiveTab('facebook-ads')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
-                    activeTab === 'facebook-ads' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
-                  }`}
-                  id="nav-facebook-ads"
-                >
-                  <Megaphone className="h-4 w-4 text-blue-400" />
-                  Facebook Ads
-                </button>
+                {guesthouse?.featureFlags?.facebookAds === true && guesthouse?.subscriptionStatus === 'ACTIVE' && (
+                  <button
+                    onClick={() => setActiveTab('facebook-ads')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
+                      activeTab === 'facebook-ads' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+                    }`}
+                    id="nav-facebook-ads"
+                  >
+                    <Megaphone className="h-4 w-4 text-blue-400" />
+                    Facebook Ads
+                  </button>
+                )}
 
-                <button
-                  onClick={() => setActiveTab('marketing')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
-                    activeTab === 'marketing' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
-                  }`}
-                  id="nav-marketing"
-                >
-                  <Smartphone className="h-4 w-4" />
-                  WhatsApp Marketing
-                </button>
+                {guesthouse?.featureFlags?.whatsappMarketing === true && guesthouse?.subscriptionStatus === 'ACTIVE' && (
+                  <button
+                    onClick={() => setActiveTab('marketing')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
+                      activeTab === 'marketing' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+                    }`}
+                    id="nav-marketing"
+                  >
+                    <Smartphone className="h-4 w-4" />
+                    WhatsApp Marketing
+                  </button>
+                )}
 
                 <button
                   onClick={() => setActiveTab('customers')}
@@ -533,16 +690,18 @@ export default function App() {
                   Stat Reports
                 </button>
 
-                <button
-                  onClick={() => setActiveTab('ai-analytics')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
-                    activeTab === 'ai-analytics' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
-                  }`}
-                  id="nav-ai-analytics"
-                >
-                  <Brain className="h-4 w-4 text-amber-400" />
-                  AI Booking Forecast
-                </button>
+                {guesthouse?.featureFlags?.aiForecasts === true && guesthouse?.subscriptionStatus === 'ACTIVE' && (
+                  <button
+                    onClick={() => setActiveTab('ai-analytics')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
+                      activeTab === 'ai-analytics' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+                    }`}
+                    id="nav-ai-analytics"
+                  >
+                    <Brain className="h-4 w-4 text-amber-400" />
+                    AI Booking Forecast
+                  </button>
+                )}
 
                 {user.role === 'TENANT_ADMIN' && (
                   <button
@@ -561,16 +720,29 @@ export default function App() {
 
             {/* SUPER ADMIN ROUTE OVERSEER */}
             {user.role === 'SUPER_ADMIN' && (
-              <button
-                onClick={() => setActiveTab('super-admin')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
-                  activeTab === 'super-admin' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
-                }`}
-                id="nav-super-admin"
-              >
-                <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                Global SaaS Overseer
-              </button>
+              <>
+                <button
+                  onClick={() => setActiveTab('super-admin')}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
+                    activeTab === 'super-admin' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+                  }`}
+                  id="nav-super-admin"
+                >
+                  <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                  Global SaaS Overseer
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('super-settings')}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
+                    activeTab === 'super-settings' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+                  }`}
+                  id="nav-super-settings"
+                >
+                  <Settings className="h-4 w-4 text-indigo-400" />
+                  SaaS Overseer Settings
+                </button>
+              </>
             )}
           </nav>
         </div>
@@ -725,6 +897,10 @@ export default function App() {
                   onRefreshGlobalStats={handleDataRefresh}
                   onSwitchTenant={handleSwitchSimulatedTenant}
                 />
+              )}
+
+              {activeTab === 'super-settings' && (
+                <SuperAdminSettingsView />
               )}
             </motion.div>
           </AnimatePresence>

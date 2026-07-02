@@ -1696,88 +1696,101 @@ export default function MarketingView({
             <p className="text-xs text-gray-400 mt-1">Connect your verified Meta developer accounts to transmit outbound texts directly from your business numbers.</p>
           </div>
 
-          <form onSubmit={saveWhatsAppSettings} className="space-y-4 max-w-xl" id="whatsapp-settings-form">
-            <div className="space-y-1" id="field-phone-id">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500">
-                <Smartphone className="h-4 w-4" />
-                <label>META WHATSAPP PHONE NUMBER ID</label>
+          {guesthouse.featureFlags?.linkWhatsappNumber === false ? (
+            <div className="bg-red-50 p-6 rounded-2xl border border-red-100 flex flex-col items-center justify-center text-center space-y-3">
+              <div className="p-3 bg-red-100 rounded-full text-red-600">
+                <Lock className="h-6 w-6" />
               </div>
-              <input
-                type="text"
-                placeholder="e.g. 108495029302941"
-                value={phoneId}
-                onChange={(e) => setPhoneId(e.target.value)}
-                className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none font-mono"
-              />
+              <h5 className="font-bold text-red-950 text-xs uppercase tracking-wider">Credentials Linking Disabled</h5>
+              <p className="text-[11px] text-red-800 max-w-md leading-relaxed">
+                This feature has been deactivated for your workspace by the SaaS Platform Overseer. 
+                Please contact support or your account manager to upgrade your subscription tier.
+              </p>
             </div>
-
-            <div className="space-y-1" id="field-token">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500">
-                <Key className="h-4 w-4" />
-                <label>WHATSAPP SYSTEM ACCESS TOKEN</label>
-              </div>
-              <input
-                type="password"
-                placeholder="EAAGb0ZC..."
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none font-mono"
-              />
-            </div>
-
-            <div className="space-y-1" id="field-business-id">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500">
-                <Settings className="h-4 w-4" />
-                <label>WHATSAPP BUSINESS ACCOUNT ID</label>
-              </div>
-              <input
-                type="text"
-                placeholder="e.g. 984501920392019"
-                value={businessId}
-                onChange={(e) => setBusinessId(e.target.value)}
-                className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none font-mono"
-              />
-            </div>
-
-            {/* Toggle delete logs permission */}
-            <div className="border-t border-gray-100 pt-4 space-y-4" id="log-delete-control-section">
-              <div className="flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-100" id="field-allow-log-delete">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900">
-                    <Trash2 className="h-4 w-4 text-red-500" />
-                    <span>ALLOW CAMPAIGN & AUDIT LOG DELETION</span>
-                  </div>
-                  <p className="text-[10px] text-gray-500 max-w-sm">
-                    Allow authorized workspace managers to delete completed campaigns and WhatsApp message logs.
-                  </p>
+          ) : (
+            <form onSubmit={saveWhatsAppSettings} className="space-y-4 max-w-xl" id="whatsapp-settings-form">
+              <div className="space-y-1" id="field-phone-id">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500">
+                  <Smartphone className="h-4 w-4" />
+                  <label>META WHATSAPP PHONE NUMBER ID</label>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={allowLogDeletion}
-                    onChange={(e) => setAllowLogDeletion(e.target.checked)}
-                    className="sr-only peer"
-                    id="allow-log-delete-toggle"
-                  />
-                  <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-500"></div>
-                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 108495029302941"
+                  value={phoneId}
+                  onChange={(e) => setPhoneId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none font-mono"
+                />
               </div>
-            </div>
 
-            <button
-              type="submit"
-              className="px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-semibold shadow-sm flex items-center gap-2 transition-colors"
-              id="save-settings-btn"
-            >
-              Update WhatsApp Number Settings
-            </button>
-
-            {saveStatus && (
-              <div className="p-3 bg-green-50 border border-green-200 text-green-800 rounded-xl text-xs animate-fade-in" id="settings-success">
-                Meta credentials stored successfully! Ready to send outbound WhatsApp messages from your business account.
+              <div className="space-y-1" id="field-token">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500">
+                  <Key className="h-4 w-4" />
+                  <label>WHATSAPP SYSTEM ACCESS TOKEN</label>
+                </div>
+                <input
+                  type="password"
+                  placeholder="EAAGb0ZC..."
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none font-mono"
+                />
               </div>
-            )}
-          </form>
+
+              <div className="space-y-1" id="field-business-id">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500">
+                  <Settings className="h-4 w-4" />
+                  <label>WHATSAPP BUSINESS ACCOUNT ID</label>
+                </div>
+                <input
+                  type="text"
+                  placeholder="e.g. 984501920392019"
+                  value={businessId}
+                  onChange={(e) => setBusinessId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none font-mono"
+                />
+              </div>
+
+              {/* Toggle delete logs permission */}
+              <div className="border-t border-gray-100 pt-4 space-y-4" id="log-delete-control-section">
+                <div className="flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-100" id="field-allow-log-delete">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900">
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                      <span>ALLOW CAMPAIGN & AUDIT LOG DELETION</span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 max-w-sm">
+                      Allow authorized workspace managers to delete completed campaigns and WhatsApp message logs.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={allowLogDeletion}
+                      onChange={(e) => setAllowLogDeletion(e.target.checked)}
+                      className="sr-only peer"
+                      id="allow-log-delete-toggle"
+                    />
+                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-500"></div>
+                  </label>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-semibold shadow-sm flex items-center gap-2 transition-colors"
+                id="save-settings-btn"
+              >
+                Update WhatsApp Number Settings
+              </button>
+
+              {saveStatus && (
+                <div className="p-3 bg-green-50 border border-green-200 text-green-800 rounded-xl text-xs animate-fade-in" id="settings-success">
+                  Meta credentials stored successfully! Ready to send outbound WhatsApp messages from your business account.
+                </div>
+              )}
+            </form>
+          )}
         </div>
       )}
 

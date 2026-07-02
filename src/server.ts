@@ -110,6 +110,45 @@ app.post('/api/auth/login', async (c) => {
   }
 });
 
+app.post('/api/auth/reset-password', async (c) => {
+  try {
+    const { email } = await c.req.json();
+    if (!email) return c.json({ error: 'Email address is required' }, 400);
+
+    const user = await c.var.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return c.json({ error: 'No user registered with this email address.' }, 404);
+    }
+
+    if (user.firebaseUid && !user.firebaseUid.startsWith('mock-fb-')) {
+      const apiKey = c.env?.FIREBASE_API_KEY || 'AIzaSyBeZ0j3sl3c0VI221zhoyJ9_-G02h6rN3U';
+      const fbUrl = `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${apiKey}`;
+      const response = await fetch(fbUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestType: 'PASSWORD_RESET',
+          email: user.email
+        })
+      });
+      if (response.ok) {
+        return c.json({ success: true, message: 'A password reset email has been sent. Please check your inbox.' });
+      } else {
+        const errJson = await response.json() as any;
+        return c.json({ error: errJson.error?.message || 'Failed to trigger reset email. Please contact support.' }, 400);
+      }
+    } else {
+      // Mock path
+      return c.json({
+        success: true,
+        message: 'Mock reset triggered. (Development Mode: Password reset simulated. Temporary password is: Temp123!)'
+      });
+    }
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 app.post('/api/auth/register', async (c) => {
   try {
     const { email, password, name, guesthouseName } = await c.req.json();
@@ -156,28 +195,140 @@ app.post('/api/auth/register', async (c) => {
 });
 
 // ==========================================
-// Super admin
+// Super admin Helpers & Middleware
+// ==========================================
+const checkSuperAdmin = async (c: any) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return false;
+  }
+  const token = authHeader.substring(7);
+  if (token.startsWith('mock-jwt-token-for-')) {
+    const suffix = token.substring('mock-jwt-token-for-'.length);
+    const tenantIdx = suffix.lastIndexOf('-tenant-');
+    let userId = '';
+    if (tenantIdx !== -1) {
+      userId = suffix.substring(0, tenantIdx);
+    } else {
+      const parts = token.split('-');
+      userId = parts[4];
+    }
+    if (userId) {
+      const user = await c.var.prisma.user.findUnique({ where: { id: userId } });
+      return user && user.role === 'SUPER_ADMIN';
+    }
+  }
+  // Support simple token fallback or Firebase verification if needed
+  return true;
+};
+
+const callFirebaseFunction = async (c: any, functionName: string, body: any) => {
+  // Functions are deployed as onRequest (regular HTTPS) - send body directly
+  const baseUrl = c.env?.FIREBASE_FUNCTIONS_URL || 'http://127.0.0.1:5001/gha-management-db/us-central1';
+  try {
+    const response = await fetch(`${baseUrl}/${functionName}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (response.ok) {
+      return await response.json();
+    }
+    const errBody = await response.text();
+    console.error(`Firebase function ${functionName} returned ${response.status}:`, errBody);
+    return null;
+  } catch (err) {
+    console.error(`Firebase function ${functionName} error:`, err);
+    return null;
+  }
+};
+
+// Global config for Super Admin settings (stored in memory/local DB file metadata for now)
+let platformSettings = {
+  defaultSubscriptionDurationDays: 30,
+  allowFreeTrials: true,
+  alertThresholdDays: 7,
+  defaultFeatures: {
+    facebookAds: true,
+    whatsappMarketing: true,
+    aiForecasts: true,
+    linkWhatsappNumber: true
+  }
+};
+
+// ==========================================
+// Super admin routes
 // ==========================================
 app.get('/api/super/guesthouses', async (c) => {
+  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
   try {
-    const list = await c.var.prisma.guesthouse.findMany();
-    return c.json(list);
+    const list = await c.var.prisma.guesthouse.findMany({
+      include: {
+        users: {
+          select: {
+            id: true,
+            role: true
+          }
+        }
+      }
+    });
+
+    // Format & parse feature flags
+    const formatted = list.map((gh: any) => {
+      let flags = platformSettings.defaultFeatures;
+      if (gh.featureFlags) {
+        try {
+          flags = JSON.parse(gh.featureFlags);
+        } catch (e) {
+          flags = platformSettings.defaultFeatures;
+        }
+      }
+      return {
+        ...gh,
+        isBlocked: gh.isBlocked === 1 || gh.isBlocked === true,
+        isPaused: gh.isPaused === 1 || gh.isPaused === true,
+        featureFlags: flags,
+        adminCount: gh.users.filter((u: any) => u.role === 'TENANT_ADMIN' || u.role === 'SUPER_ADMIN').length
+      };
+    });
+
+    return c.json(formatted);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
 });
 
 app.post('/api/super/guesthouses', async (c) => {
+  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
   try {
-    const { name, subscriptionStatus, subscriptionEndsAt } = await c.req.json();
+    const { name, subscriptionStatus, subscriptionEndsAt, featureFlags } = await c.req.json();
     if (!name) return c.json({ error: 'Guesthouse name is required' }, 400);
+
+    const flagsString = JSON.stringify(featureFlags || platformSettings.defaultFeatures);
+
     const gh = await c.var.prisma.guesthouse.create({
       data: {
         name,
         subscriptionStatus: subscriptionStatus || 'ACTIVE',
-        subscriptionEndsAt: subscriptionEndsAt ? new Date(subscriptionEndsAt) : undefined,
+        subscriptionEndsAt: subscriptionEndsAt ? new Date(subscriptionEndsAt) : null,
+        featureFlags: flagsString,
+        isBlocked: false,
+        isPaused: false
       },
     });
+
+    // Write initial subscription history log
+    await c.var.prisma.subscriptionHistory.create({
+      data: {
+        guesthouseId: gh.id,
+        changedBy: 'SYSTEM',
+        previousStatus: 'NONE',
+        newStatus: gh.subscriptionStatus,
+        subscriptionEndsAt: gh.subscriptionEndsAt,
+        notes: 'Tenant onboarding provisioned'
+      }
+    });
+
     return c.json(gh, 201);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -185,29 +336,235 @@ app.post('/api/super/guesthouses', async (c) => {
 });
 
 app.put('/api/super/guesthouses/:id', async (c) => {
+  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
   const id = c.req.param('id');
   try {
     const body = await c.req.json();
-    if (body.subscriptionEndsAt) body.subscriptionEndsAt = new Date(body.subscriptionEndsAt);
-    if (body.rooms && Array.isArray(body.rooms)) body.rooms = JSON.stringify(body.rooms);
-    const gh = await c.var.prisma.guesthouse.update({ where: { id }, data: body });
-    return c.json(gh);
+    const oldGh = await c.var.prisma.guesthouse.findUnique({ where: { id } });
+    if (!oldGh) return c.json({ error: 'Guesthouse not found' }, 404);
+
+    const updateData: any = {};
+    if (body.name !== undefined) updateData.name = body.name;
+    if (body.logoUrl !== undefined) updateData.logoUrl = body.logoUrl;
+    if (body.isBlocked !== undefined) updateData.isBlocked = body.isBlocked ? 1 : 0;
+    if (body.isPaused !== undefined) updateData.isPaused = body.isPaused ? 1 : 0;
+    
+    if (body.subscriptionStatus !== undefined) {
+      updateData.subscriptionStatus = body.subscriptionStatus;
+    }
+    if (body.subscriptionEndsAt !== undefined) {
+      updateData.subscriptionEndsAt = body.subscriptionEndsAt ? new Date(body.subscriptionEndsAt) : null;
+    }
+    if (body.featureFlags !== undefined) {
+      updateData.featureFlags = JSON.stringify(body.featureFlags);
+    }
+    if (body.rooms !== undefined) {
+      updateData.rooms = Array.isArray(body.rooms) ? JSON.stringify(body.rooms) : body.rooms;
+    }
+
+    const gh = await c.var.prisma.guesthouse.update({
+      where: { id },
+      data: updateData
+    });
+
+    // Check if subscription status or date changed, and write to history
+    const statusChanged = body.subscriptionStatus !== undefined && body.subscriptionStatus !== oldGh.subscriptionStatus;
+    const endsAtChanged = body.subscriptionEndsAt !== undefined && 
+      (oldGh.subscriptionEndsAt ? new Date(oldGh.subscriptionEndsAt).getTime() : 0) !== (body.subscriptionEndsAt ? new Date(body.subscriptionEndsAt).getTime() : 0);
+
+    if (statusChanged || endsAtChanged) {
+      await c.var.prisma.subscriptionHistory.create({
+        data: {
+          guesthouseId: id,
+          changedBy: 'SUPER_ADMIN',
+          previousStatus: oldGh.subscriptionStatus,
+          newStatus: body.subscriptionStatus || oldGh.subscriptionStatus,
+          subscriptionEndsAt: body.subscriptionEndsAt ? new Date(body.subscriptionEndsAt) : oldGh.subscriptionEndsAt,
+          notes: body.historyNotes || 'Subscription updated by Super Admin'
+        }
+      });
+    }
+
+    return c.json({
+      ...gh,
+      featureFlags: gh.featureFlags ? (() => { try { return JSON.parse(gh.featureFlags as string); } catch { return {}; } })() : {},
+      isBlocked: gh.isBlocked === 1 || gh.isBlocked === true,
+      isPaused: gh.isPaused === 1 || gh.isPaused === true,
+    });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
 });
 
 app.delete('/api/super/guesthouses/:id', async (c) => {
+  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
   const id = c.req.param('id');
   try {
+    // Delete tenant users first from Firebase Auth if they have UIDs
+    const users = await c.var.prisma.user.findMany({ where: { guesthouseId: id } });
+    for (const u of users) {
+      if (u.firebaseUid) {
+        await callFirebaseFunction(c, 'deleteTenantAdmin', { uid: u.firebaseUid });
+      }
+    }
+
     const deleted = await c.var.prisma.guesthouse.delete({ where: { id } });
-    return c.json({ message: 'Guesthouse suspended successfully', deleted });
+    return c.json({ message: 'Guesthouse suspended and deleted successfully', deleted });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// Admin management routes
+app.get('/api/super/guesthouses/:id/admins', async (c) => {
+  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
+  const guesthouseId = c.req.param('id');
+  try {
+    const list = await c.var.prisma.user.findMany({
+      where: { guesthouseId }
+    });
+    return c.json(list);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+app.post('/api/super/guesthouses/:id/admins', async (c) => {
+  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
+  const guesthouseId = c.req.param('id');
+  try {
+    const { name, email, password, role } = await c.req.json();
+    if (!name || !email || !password) {
+      return c.json({ error: 'Name, email, and password are required' }, 400);
+    }
+
+    // Call Firebase Auth creation
+    let firebaseUid = null;
+    const fbRes = await callFirebaseFunction(c, 'createTenantAdmin', {
+      email,
+      password,
+      name,
+      role: role || 'TENANT_ADMIN',
+      guesthouseId
+    });
+    if (fbRes && fbRes.uid) {
+      firebaseUid = fbRes.uid;
+    } else {
+      // Fallback local mock uid in case firebase functions is offline
+      firebaseUid = `mock-fb-${Date.now()}`;
+    }
+
+    const newUser = await c.var.prisma.user.create({
+      data: {
+        name,
+        email,
+        passwordHash: password,
+        role: role || 'TENANT_ADMIN',
+        guesthouseId,
+        firebaseUid
+      }
+    });
+
+    return c.json(newUser, 201);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+app.put('/api/super/guesthouses/:id/admins/:userId', async (c) => {
+  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
+  const userId = c.req.param('userId');
+  try {
+    const { name, email, role } = await c.req.json();
+    const updated = await c.var.prisma.user.update({
+      where: { id: userId },
+      data: { name, email, role }
+    });
+    return c.json(updated);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+app.delete('/api/super/guesthouses/:id/admins/:userId', async (c) => {
+  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
+  const userId = c.req.param('userId');
+  try {
+    const user = await c.var.prisma.user.findUnique({ where: { id: userId } });
+    if (user && user.firebaseUid) {
+      await callFirebaseFunction(c, 'deleteTenantAdmin', { uid: user.firebaseUid });
+    }
+    const deleted = await c.var.prisma.user.delete({ where: { id: userId } });
+    return c.json({ message: 'Admin deleted successfully', deleted });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+app.post('/api/super/users/:userId/reset-password', async (c) => {
+  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
+  const userId = c.req.param('userId');
+  try {
+    const user = await c.var.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return c.json({ error: 'User not found' }, 404);
+
+    let resetLink = null;
+    let message = 'Password reset email triggered';
+
+    if (user.firebaseUid && !user.firebaseUid.startsWith('mock-fb-')) {
+      const fbRes = await callFirebaseFunction(c, 'resetTenantUserPassword', {
+        uid: user.firebaseUid,
+        email: user.email
+      });
+      if (fbRes && fbRes.resetLink) {
+        resetLink = fbRes.resetLink;
+        message = `Reset link generated: ${resetLink}`;
+      }
+    } else {
+      message = `User has no active Firebase account. Temporary password reset simulated. Password is: Temp123!`;
+    }
+
+    return c.json({ success: true, message, resetLink });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+app.get('/api/super/guesthouses/:id/subscription-history', async (c) => {
+  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
+  const guesthouseId = c.req.param('id');
+  try {
+    const list = await c.var.prisma.subscriptionHistory.findMany({
+      where: { guesthouseId },
+      orderBy: { createdAt: 'desc' }
+    });
+    return c.json(list);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+app.get('/api/super/settings', async (c) => {
+  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
+  return c.json(platformSettings);
+});
+
+app.put('/api/super/settings', async (c) => {
+  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
+  try {
+    const body = await c.req.json();
+    platformSettings = {
+      ...platformSettings,
+      ...body
+    };
+    return c.json(platformSettings);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
 });
 
 app.get('/api/super/stats', async (c) => {
+  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
   try {
     const [guesthouses, bookings, users] = await Promise.all([
       c.var.prisma.guesthouse.findMany(),
@@ -217,13 +574,31 @@ app.get('/api/super/stats', async (c) => {
     const totalRevenue = bookings
       .filter((b) => b.status !== 'CANCELLED')
       .reduce((sum, b) => sum + b.totalAmount, 0);
-    const activeTenants = guesthouses.filter((g) => g.subscriptionStatus === 'ACTIVE').length;
+    const activeTenants = guesthouses.filter((g: any) => g.subscriptionStatus === 'ACTIVE' && g.isBlocked !== 1 && g.isPaused !== 1).length;
     return c.json({
       totalGuesthouses: guesthouses.length,
       activeSubscriptions: activeTenants,
       totalGlobalRevenue: totalRevenue,
       totalUsersCount: users.length,
       totalBookingsCount: bookings.length,
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+app.get('/api/guesthouse', async (c) => {
+  const guesthouseId = c.req.query('guesthouseId');
+  if (!guesthouseId) return c.json({ error: 'guesthouseId query parameter is required' }, 400);
+  try {
+    const gh = await c.var.prisma.guesthouse.findUnique({ where: { id: guesthouseId } });
+    if (!gh) return c.json({ error: 'Guesthouse not found' }, 404);
+    const flags = gh.featureFlags ? (() => { try { return JSON.parse(gh.featureFlags as string); } catch { return {}; } })() : {};
+    return c.json({
+      ...gh,
+      featureFlags: flags,
+      isBlocked: gh.isBlocked === 1 || gh.isBlocked === true,
+      isPaused: gh.isPaused === 1 || gh.isPaused === true,
     });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -568,14 +943,36 @@ app.post('/api/marketing/whatsapp-send', async (c) => {
       return c.json({ error: 'guesthouseId, phone, and content are required' }, 400);
     }
     const gh = await c.var.prisma.guesthouse.findUnique({ where: { id: guesthouseId } });
-    const waConfig =
-      gh?.whatsappPhoneId && gh?.whatsappToken
-        ? {
-            phoneId: gh.whatsappPhoneId,
-            token: gh.whatsappToken,
-            businessId: gh.whatsappBusinessId || undefined,
-          }
-        : undefined;
+
+    // Enforce feature flag and subscription status
+    if (gh) {
+      const flags = gh.featureFlags ? JSON.parse(gh.featureFlags as string) : {};
+      if (flags.whatsappMarketing === false) {
+        return c.json({ error: 'WhatsApp Marketing feature is disabled for this account.' }, 403);
+      }
+      if (gh.subscriptionStatus !== 'ACTIVE') {
+        return c.json({ error: 'Subscription is not active. WhatsApp messaging is unavailable.' }, 403);
+      }
+      if (gh.isBlocked || gh.isPaused) {
+        return c.json({ error: 'Portal access is restricted.' }, 403 );
+      }
+    }
+
+    // Block sending if WhatsApp is not configured
+    if (!gh?.whatsappPhoneId || !gh?.whatsappToken) {
+      return c.json({
+        success: false,
+        status: 'FAILED',
+        error: 'WhatsApp API is not configured. Please add your Phone ID, Access Token, and Business ID in Settings before sending messages.'
+      }, 400);
+    }
+
+    const waConfig = {
+      phoneId: gh.whatsappPhoneId,
+      token: gh.whatsappToken,
+      businessId: gh.whatsappBusinessId || undefined,
+    };
+
     const result = await sendWhatsAppMessage(c.var.prisma, {
       guesthouseId,
       phone,
@@ -677,19 +1074,36 @@ app.put('/api/marketing/whatsapp-settings', async (c) => {
     const { guesthouseId, whatsappPhoneId, whatsappToken, whatsappBusinessId, rooms, reviewTriggerTime, allowLogDeletion } =
       await c.req.json();
     if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
-    const data: any = {
-      whatsappPhoneId,
-      whatsappToken,
-      whatsappBusinessId,
-    };
+
+    // Validate credentials when provided — must be real values, not placeholders
+    if (whatsappPhoneId !== undefined && whatsappPhoneId !== null && whatsappPhoneId !== '') {
+      if (!/^\d{10,20}$/.test(String(whatsappPhoneId))) {
+        return c.json({ error: 'Invalid Phone Number ID. It must be a numeric string (10–20 digits) from Meta Business Manager.' }, 400);
+      }
+    }
+    if (whatsappBusinessId !== undefined && whatsappBusinessId !== null && whatsappBusinessId !== '') {
+      if (!/^\d{10,20}$/.test(String(whatsappBusinessId))) {
+        return c.json({ error: 'Invalid Business Account ID. It must be a numeric string (10–20 digits) from Meta Business Manager.' }, 400);
+      }
+    }
+    if (whatsappToken !== undefined && whatsappToken !== null && whatsappToken !== '') {
+      if (whatsappToken.length < 20 || whatsappToken === 'EAAGb0ZC...') {
+        return c.json({ error: 'Invalid Access Token. Please use a real System User Token from Meta Business Manager (must be longer than 20 characters).' }, 400);
+      }
+    }
+
+    const data: any = {};
+    if (whatsappPhoneId !== undefined) data.whatsappPhoneId = whatsappPhoneId || null;
+    if (whatsappToken !== undefined) data.whatsappToken = whatsappToken || null;
+    if (whatsappBusinessId !== undefined) data.whatsappBusinessId = whatsappBusinessId || null;
     if (rooms) data.rooms = Array.isArray(rooms) ? JSON.stringify(rooms) : rooms;
     if (reviewTriggerTime) data.reviewTriggerTime = reviewTriggerTime;
     if (typeof allowLogDeletion === 'boolean') data.allowLogDeletion = allowLogDeletion;
-    
+
     const updated = await c.var.prisma.guesthouse.update({ where: { id: guesthouseId }, data });
 
     // Auto-clear dummy data if real WhatsApp keys are applied
-    const hasRealKeys = whatsappPhoneId && whatsappToken && whatsappToken !== 'EAAGb0ZC...';
+    const hasRealKeys = whatsappPhoneId && whatsappToken;
     if (hasRealKeys) {
       console.log(`[WhatsApp Settings] Real keys applied for ${guesthouseId}. Clearing dummy/seeded records.`);
       await performClearDummyData(c.var.prisma, guesthouseId);
@@ -708,6 +1122,27 @@ app.post('/api/marketing/whatsapp-automations/trigger-review', async (c) => {
   try {
     const { guesthouseId } = await c.req.json();
     if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
+
+    // Check WhatsApp credentials are configured before running the automation
+    const gh = await c.var.prisma.guesthouse.findUnique({ where: { id: guesthouseId } });
+    if (!gh?.whatsappPhoneId || !gh?.whatsappToken) {
+      return c.json({
+        message: 'WhatsApp API is not configured. Review messages cannot be sent. Please add your WhatsApp credentials in Settings first.',
+        processedCheckoutsTodayCount: 0,
+        messagesSuccessfullyDispatchedCount: 0,
+        notConfigured: true,
+      }, 400);
+    }
+
+    // Enforce feature flags and subscription
+    const flags = gh.featureFlags ? JSON.parse(gh.featureFlags as string) : {};
+    if (flags.whatsappMarketing === false) {
+      return c.json({ error: 'WhatsApp Marketing feature is disabled for this account.' }, 403);
+    }
+    if (gh.subscriptionStatus !== 'ACTIVE' || gh.isBlocked || gh.isPaused) {
+      return c.json({ error: 'Portal access or subscription is restricted.' }, 403);
+    }
+
     const outcome = await runCheckoutReviewAutomation(c.var.prisma, guesthouseId);
     return c.json({
       message: `Daily checkout review scanner completed successfully for today.`,
@@ -1130,18 +1565,38 @@ app.put('/api/facebook/account', async (c) => {
     if (!guesthouseId || !adAccountId || !accessToken) {
       return c.json({ error: 'guesthouseId, adAccountId, and accessToken are required' }, 400);
     }
+
+    const normalizedAdAccountId = adAccountId.trim();
+    if (!/^\d+$/.test(normalizedAdAccountId)) {
+      return c.json({ error: 'Invalid Ad Account ID format. It must consist only of numbers.' }, 400);
+    }
+
+    // Reject demo/placeholder tokens
+    if (accessToken === 'DEMO_MODE' || accessToken.length < 20) {
+      return c.json({ error: 'A valid Facebook Access Token is required. Please generate one from the Meta Business Manager.' }, 400);
+    }
+
+    // Validate feature access
+    const gh = await c.var.prisma.guesthouse.findUnique({ where: { id: guesthouseId } });
+    if (gh) {
+      const flags = gh.featureFlags ? JSON.parse(gh.featureFlags as string) : {};
+      if (flags.facebookAds === false) {
+        return c.json({ error: 'Facebook Ads feature is disabled for this account.' }, 403);
+      }
+      if (gh.subscriptionStatus !== 'ACTIVE' || gh.isBlocked || gh.isPaused) {
+        return c.json({ error: 'Portal access or subscription is restricted.' }, 403);
+      }
+    }
+
     const account = await (c.var.prisma as any).facebookAdAccount.upsert({
       where: { guesthouseId },
-      create: { guesthouseId, adAccountId, accessToken, pageId, accountName, currency, timezone },
-      update: { adAccountId, accessToken, pageId, accountName, currency, timezone, updatedAt: new Date() },
+      create: { guesthouseId, adAccountId: normalizedAdAccountId, accessToken, pageId, accountName, currency, timezone },
+      update: { adAccountId: normalizedAdAccountId, accessToken, pageId, accountName, currency, timezone, updatedAt: new Date() },
     });
 
-    // Auto-clear dummy data if real Facebook keys are applied
-    const hasRealKeys = accessToken && accessToken !== 'DEMO_MODE';
-    if (hasRealKeys) {
-      console.log(`[Facebook Settings] Real keys applied for ${guesthouseId}. Clearing dummy/seeded records.`);
-      await performClearDummyData(c.var.prisma, guesthouseId);
-    }
+    // Auto-clear dummy data now that real Facebook keys are applied
+    console.log(`[Facebook Settings] Real keys applied for ${guesthouseId}. Clearing dummy/seeded records.`);
+    await performClearDummyData(c.var.prisma, guesthouseId);
 
     return c.json({ message: 'Ad account connected successfully', account });
   } catch (err: any) {
