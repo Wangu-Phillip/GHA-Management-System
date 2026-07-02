@@ -349,7 +349,7 @@ export default function FacebookAdsView({ guesthouseId }: Props) {
         <div className="flex items-center gap-2">
           {/* Date range selector */}
           <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1" id="fb-range-selector">
-            {[7, 30, 90].map((d) => (
+            {[7, 30, 90, 365, 3650].map((d) => (
               <button
                 key={d}
                 onClick={() => { setWindowDays(d); fetchInsights(d); }}
@@ -360,7 +360,7 @@ export default function FacebookAdsView({ guesthouseId }: Props) {
                 }`}
                 id={`fb-range-${d}d`}
               >
-                {d}d
+                {d === 365 ? '1y' : d === 3650 ? 'All Time' : `${d}d`}
               </button>
             ))}
           </div>
@@ -673,14 +673,14 @@ export default function FacebookAdsView({ guesthouseId }: Props) {
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
-                    {[30, 90].map((d) => (
+                    {[30, 90, 365, 3650].map((d) => (
                       <button key={d}
                         onClick={() => { setWindowDays(d); setAdvice(null); fetchAdvice(d); }}
                         className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                           windowDays === d ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                         }`}
                         id={`advisor-window-${d}d`}>
-                        {d}d
+                        {d === 365 ? '1y' : d === 3650 ? 'All Time' : `${d}d`}
                       </button>
                     ))}
                   </div>

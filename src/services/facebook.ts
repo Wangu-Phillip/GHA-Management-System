@@ -212,6 +212,7 @@ export async function fetchAdInsights(
     level = 'campaign',
   }: { since: string; until: string; level?: 'campaign' | 'adset' | 'ad' | 'account' }
 ): Promise<NormalizedInsight[]> {
+  const normalizedId = normalizeAdAccountId(adAccountId);
   const fields = [
     'campaign_id',
     'campaign_name',
@@ -240,7 +241,7 @@ export async function fetchAdInsights(
     access_token: accessToken,
   });
 
-  const path = `/${adAccountId}/insights?${params.toString()}`;
+  const path = `/${normalizedId}/insights?${params.toString()}`;
   const data = await graphGet(path, accessToken);
   const raw: RawGraphInsight[] = data.data || [];
 
@@ -261,9 +262,10 @@ export async function fetchCampaigns(
   accessToken: string,
   adAccountId: string
 ): Promise<GraphCampaign[]> {
+  const normalizedId = normalizeAdAccountId(adAccountId);
   const fields = 'id,name,status,objective,daily_budget,lifetime_budget,start_time,stop_time';
   const params = new URLSearchParams({ fields, limit: '100', access_token: accessToken });
-  const data = await graphGet(`/${adAccountId}/campaigns?${params}`, accessToken);
+  const data = await graphGet(`/${normalizedId}/campaigns?${params}`, accessToken);
   return data.data || [];
 }
 
@@ -306,6 +308,7 @@ export async function createCampaign(
     stopTime?: string;
   }
 ): Promise<{ id: string }> {
+  const normalizedId = normalizeAdAccountId(adAccountId);
   const body: Record<string, unknown> = {
     name: payload.name,
     objective: payload.objective,
@@ -317,7 +320,7 @@ export async function createCampaign(
   if (payload.startTime) body.start_time = payload.startTime;
   if (payload.stopTime) body.stop_time = payload.stopTime;
 
-  return graphPost(`/${adAccountId}/campaigns`, accessToken, body);
+  return graphPost(`/${normalizedId}/campaigns`, accessToken, body);
 }
 
 /**
@@ -415,4 +418,10 @@ export function generateMockCampaigns(): GraphCampaign[] {
       start_time: '2026-06-01T00:00:00+0000',
     },
   ];
+}
+
+function normalizeAdAccountId(id: string): string {
+  const cleaned = id.trim();
+  if (cleaned.startsWith('act_')) return cleaned;
+  return `act_${cleaned}`;
 }
