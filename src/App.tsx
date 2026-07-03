@@ -195,12 +195,12 @@ export default function App() {
     }
   }, [user]);
 
-  // Auto-poll every 10 seconds to pick up live webhook updates (read, reply, conversions)
+  // Auto-poll every 1 minute to pick up live webhook updates (read, reply, conversions)
   useEffect(() => {
     if (!user?.guesthouseId) return;
     const interval = setInterval(() => {
       fetchTenantMetrics(user.guesthouseId);
-    }, 10000);
+    }, 60000);
     return () => clearInterval(interval);
   }, [user]);
 
