@@ -117,6 +117,7 @@ export default function MarketingView({
   const [businessId, setBusinessId] = useState(guesthouse.whatsappBusinessId || '');
   const [allowLogDeletion, setAllowLogDeletion] = useState(guesthouse.allowLogDeletion || false);
   const [saveStatus, setSaveStatus] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     setPhoneId(guesthouse.whatsappPhoneId || '');
@@ -368,6 +369,7 @@ export default function MarketingView({
   // Submit WhatsApp Meta credentials
   const saveWhatsAppSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaveError(null);
     try {
       const response = await fetch('/api/marketing/whatsapp-settings', {
         method: 'PUT',
@@ -387,9 +389,13 @@ export default function MarketingView({
         setSaveStatus(true);
         setTimeout(() => setSaveStatus(false), 2000);
         await onRefresh();
+      } else {
+        const errData = await response.json() as any;
+        setSaveError(errData.error || 'Failed to save settings');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setSaveError(err.message || 'An unexpected error occurred');
     }
   };
 
@@ -1708,7 +1714,7 @@ export default function MarketingView({
               </p>
             </div>
           ) : (
-            <form onSubmit={saveWhatsAppSettings} className="space-y-4 max-w-xl" id="whatsapp-settings-form">
+            <form onSubmit={saveWhatsAppSettings} className="space-y-4 max-w-xl" id="whatsapp-settings-form" autoComplete="off">
               <div className="space-y-1" id="field-phone-id">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500">
                   <Smartphone className="h-4 w-4" />
@@ -1719,6 +1725,7 @@ export default function MarketingView({
                   placeholder="e.g. 108495029302941"
                   value={phoneId}
                   onChange={(e) => setPhoneId(e.target.value)}
+                  autoComplete="off"
                   className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none font-mono"
                 />
               </div>
@@ -1733,6 +1740,7 @@ export default function MarketingView({
                   placeholder="EAAGb0ZC..."
                   value={token}
                   onChange={(e) => setToken(e.target.value)}
+                  autoComplete="new-password"
                   className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none font-mono"
                 />
               </div>
@@ -1747,6 +1755,7 @@ export default function MarketingView({
                   placeholder="e.g. 984501920392019"
                   value={businessId}
                   onChange={(e) => setBusinessId(e.target.value)}
+                  autoComplete="off"
                   className="w-full px-3.5 py-2.5 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none font-mono"
                 />
               </div>
@@ -1787,6 +1796,12 @@ export default function MarketingView({
               {saveStatus && (
                 <div className="p-3 bg-green-50 border border-green-200 text-green-800 rounded-xl text-xs animate-fade-in" id="settings-success">
                   Meta credentials stored successfully! Ready to send outbound WhatsApp messages from your business account.
+                </div>
+              )}
+
+              {saveError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs animate-fade-in" id="settings-error">
+                  {saveError}
                 </div>
               )}
             </form>
