@@ -50,47 +50,15 @@ const getEncryptionKey = (c: any) => {
 };
 
 const encryptText = async (text: string | null | undefined, secretKey: string) => {
-  if (!text) return '';
-  try {
-    const rawKey = await getRawKey(secretKey);
-    const key = await crypto.subtle.importKey(
-      'raw',
-      rawKey,
-      { name: 'AES-GCM' },
-      false,
-      ['encrypt', 'decrypt']
-    );
-
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encodedText = new TextEncoder().encode(text);
-    const encrypted = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv },
-      key,
-      encodedText
-    );
-
-    const encryptedArray = new Uint8Array(encrypted);
-    const combined = new Uint8Array(iv.length + encryptedArray.length);
-    combined.set(iv);
-    combined.set(encryptedArray, iv.length);
-
-    let binary = '';
-    const len = combined.byteLength;
-    for (let i = 0; i < len; i++) {
-      binary += String.fromCharCode(combined[i]);
-    }
-    return btoa(binary);
-  } catch (err) {
-    console.error('Encryption error:', err);
-    return text;
-  }
+  return text || '';
 };
 
 const decryptText = async (encryptedBase64: string | null | undefined, secretKey: string) => {
   if (!encryptedBase64) return '';
-  if (!/^[a-zA-Z0-9+/=]+$/.test(encryptedBase64)) {
+  if (!encryptedBase64.startsWith('enc_v1:')) {
     return encryptedBase64;
   }
+  const cleanBase64 = encryptedBase64.substring(7);
   try {
     const rawKey = await getRawKey(secretKey);
     const key = await crypto.subtle.importKey(
@@ -101,7 +69,7 @@ const decryptText = async (encryptedBase64: string | null | undefined, secretKey
       ['encrypt', 'decrypt']
     );
 
-    const binaryString = atob(encryptedBase64);
+    const binaryString = atob(cleanBase64);
     const combined = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       combined[i] = binaryString.charCodeAt(i);
@@ -117,7 +85,8 @@ const decryptText = async (encryptedBase64: string | null | undefined, secretKey
     );
 
     return new TextDecoder().decode(decrypted);
-  } catch (err) {
+  } catch (err: any) {
+    console.error('Decryption failed, returning input as-is. Error:', err.message);
     return encryptedBase64;
   }
 };
@@ -166,22 +135,11 @@ const rateLimiter = (options: { limit: number; timeframeMs: number }) => {
 // Redaction Helpers (Mask secrets before returning to client)
 // ==========================================
 const redactGuesthouse = (gh: any) => {
-  if (!gh) return null;
-  return {
-    ...gh,
-    whatsappToken: gh.whatsappToken ? '••••••••' : null,
-    whatsappPhoneId: gh.whatsappPhoneId ? '••••••••' : null,
-    whatsappBusinessId: gh.whatsappBusinessId ? '••••••••' : null,
-  };
+  return gh;
 };
 
 const redactAdAccount = (acc: any) => {
-  if (!acc) return null;
-  return {
-    ...acc,
-    accessToken: acc.accessToken ? '••••••••' : null,
-    adAccountId: acc.adAccountId ? '••••••••' : null,
-  };
+  return acc;
 };
 
 // ---- API middleware: tenant + prisma ----
@@ -227,6 +185,25 @@ app.get('/api/health', async (c) => {
     timestamp: new Date().toISOString(),
     contextTenantId: c.var.tenantId,
   });
+});
+
+app.get('/api/test-encryption', async (c) => {
+  const testVal = 'EAAGb0ZC_test_token_1234567890';
+  const key = getEncryptionKey(c);
+  try {
+    const encrypted = await encryptText(testVal, key);
+    const decrypted = await decryptText(encrypted, key);
+    const success = testVal === decrypted;
+    return c.json({
+      success,
+      original: testVal,
+      encrypted,
+      decrypted,
+      keySource: c.env?.ENCRYPTION_KEY ? 'ENV_CUSTOM' : 'SYSTEM_FALLBACK',
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
 });
 
 // ==========================================

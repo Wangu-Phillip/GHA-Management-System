@@ -2,9 +2,10 @@ import type { AppPrisma } from '../db/prisma';
 
 const decryptText = async (encryptedBase64: string | null | undefined, secretKey?: string) => {
   if (!encryptedBase64 || !secretKey) return encryptedBase64 || '';
-  if (!/^[a-zA-Z0-9+/=]+$/.test(encryptedBase64)) {
+  if (!encryptedBase64.startsWith('enc_v1:')) {
     return encryptedBase64;
   }
+  const cleanBase64 = encryptedBase64.substring(7);
   try {
     const encoder = new TextEncoder();
     const hash = await crypto.subtle.digest('SHA-256', encoder.encode(secretKey));
@@ -17,7 +18,7 @@ const decryptText = async (encryptedBase64: string | null | undefined, secretKey
       ['encrypt', 'decrypt']
     );
 
-    const binaryString = atob(encryptedBase64);
+    const binaryString = atob(cleanBase64);
     const combined = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       combined[i] = binaryString.charCodeAt(i);
