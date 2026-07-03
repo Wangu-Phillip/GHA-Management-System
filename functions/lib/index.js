@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.setSuperAdminClaim = exports.resetTenantUserPassword = exports.deleteTenantAdmin = exports.createTenantAdmin = exports.getPairingCode = exports.getSessionStatus = exports.sendMessage = exports.getQrCode = void 0;
+exports.whatsappWebhook = exports.setSuperAdminClaim = exports.resetTenantUserPassword = exports.deleteTenantAdmin = exports.createTenantAdmin = exports.getPairingCode = exports.getSessionStatus = exports.sendMessage = exports.getQrCode = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
 const baileys_1 = __importStar(require("@whiskeysockets/baileys"));
@@ -465,5 +465,48 @@ exports.setSuperAdminClaim = (0, https_1.onRequest)({ cors: true }, async (req, 
     catch (err) {
         res.status(500).json({ error: err.message });
     }
+});
+exports.whatsappWebhook = (0, https_1.onRequest)({ cors: true }, async (req, res) => {
+    if (req.method === 'GET') {
+        const mode = req.query['hub.mode'];
+        const token = req.query['hub.verify_token'];
+        const challenge = req.query['hub.challenge'];
+        const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || 'gha-whatsapp-verify-2026';
+        if (mode === 'subscribe' && token === verifyToken) {
+            res.status(200).send(challenge);
+            return;
+        }
+        res.status(403).json({ error: 'Verification token mismatch' });
+        return;
+    }
+    if (req.method === 'POST') {
+        try {
+            const payload = req.body;
+            console.log('Received WhatsApp Webhook payload:', JSON.stringify(payload));
+            const cfBackendUrl = process.env.CLOUDFLARE_BACKEND_URL || 'http://127.0.0.1:8787';
+            const forwardUrl = `${cfBackendUrl}/api/webhooks/whatsapp`;
+            console.log(`Forwarding webhook payload to Cloudflare backend at: ${forwardUrl}`);
+            const response = await fetch(forwardUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (response.ok) {
+                console.log('Successfully forwarded webhook payload to Cloudflare backend.');
+                res.status(200).json({ success: true, message: 'Payload forwarded successfully' });
+            }
+            else {
+                const errorText = await response.text();
+                console.error('Failed to forward payload to Cloudflare backend:', errorText);
+                res.status(200).json({ success: false, error: 'Forward target returned error' });
+            }
+        }
+        catch (err) {
+            console.error('Error forwarding webhook payload:', err.message);
+            res.status(200).json({ success: false, error: err.message });
+        }
+        return;
+    }
+    res.status(405).send('Method Not Allowed');
 });
 //# sourceMappingURL=index.js.map
