@@ -4,7 +4,7 @@ import {
   Send, Settings, Sparkles, MessageSquare, ShieldAlert, History, Key,
   CheckCircle, RefreshCw, Smartphone, Users, Check, ChevronDown, ChevronUp,
   MessageCircle, AlertCircle, Eye, CornerDownRight, QrCode, Zap, Wifi,
-  WifiOff, Copy, CheckCheck, Bell, BellOff, Trash2
+  WifiOff, Copy, CheckCheck, Bell, BellOff, Trash2, Lock
 } from 'lucide-react';
 import ConfirmationModal from './ConfirmationModal';
 
@@ -81,8 +81,21 @@ export default function MarketingView({
   onRefresh,
   onUpdateGuesthouse
 }: MarketingProps) {
-  const [subTab, setSubTab] = useState<'campaign' | 'review' | 'qr' | 'logs' | 'settings'>('campaign');
+  const [subTab, setSubTab] = useState<'campaign' | 'review' | 'alerts' | 'qr' | 'logs' | 'settings'>('campaign');
   const [selectedCampId, setSelectedCampId] = useState<string | null>(null);
+
+  // Reviews search and filter states
+  const [reviewSearchQuery, setReviewSearchQuery] = useState('');
+  const [reviewRatingFilter, setReviewRatingFilter] = useState<string>('all');
+
+  // Alerts search and filter states
+  const [alertGuestSearchQuery, setAlertGuestSearchQuery] = useState('');
+  const [alertGuestStatusFilter, setAlertGuestStatusFilter] = useState<string>('all');
+
+  // Logs audit search and filter states
+  const [logSearchQuery, setLogSearchQuery] = useState('');
+  const [logTypeFilter, setLogTypeFilter] = useState<string>('all');
+  const [logDateFilter, setLogDateFilter] = useState<string>('');
 
   // Campaign Form State
   const [campName, setCampName] = useState('');
@@ -292,6 +305,17 @@ export default function MarketingView({
     [...checkedInGuests, ...upcomingGuests].map(b => [b.customerPhone, b])
   ).values()];
 
+  // Filter alertable guests based on search query and status filter
+  const filteredAlertGuests = alertableGuests.filter((g: any) => {
+    const matchesSearch = alertGuestSearchQuery.trim() === '' ||
+      g.customerName?.toLowerCase().includes(alertGuestSearchQuery.toLowerCase()) ||
+      g.customerPhone?.toLowerCase().includes(alertGuestSearchQuery.toLowerCase()) ||
+      g.roomName?.toLowerCase().includes(alertGuestSearchQuery.toLowerCase());
+    
+    const matchesStatus = alertGuestStatusFilter === 'all' || g.status === alertGuestStatusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
   const [selectedAlertPhones, setSelectedAlertPhones] = useState<string[]>([]);
 
   useEffect(() => {
@@ -305,11 +329,18 @@ export default function MarketingView({
   };
 
   const selectAllAlertGuests = () => {
-    setSelectedAlertPhones(alertableGuests.map(g => g.customerPhone));
+    setSelectedAlertPhones(prev => {
+      const filteredPhones = filteredAlertGuests.map(g => g.customerPhone);
+      const union = new Set([...prev, ...filteredPhones]);
+      return Array.from(union);
+    });
   };
 
   const deselectAllAlertGuests = () => {
-    setSelectedAlertPhones([]);
+    setSelectedAlertPhones(prev => {
+      const filteredPhones = filteredAlertGuests.map(g => g.customerPhone);
+      return prev.filter(phone => !filteredPhones.includes(phone));
+    });
   };
 
   const [alertTemplate, setAlertTemplate] = useState(
@@ -323,7 +354,7 @@ export default function MarketingView({
   const [alertDone, setAlertDone] = useState(false);
 
   const sendUtilityAlerts = async () => {
-    const guestsToSend = alertableGuests.filter(g => selectedAlertPhones.includes(g.customerPhone));
+    const guestsToSend = filteredAlertGuests.filter(g => selectedAlertPhones.includes(g.customerPhone));
     if (guestsToSend.length === 0) return;
     setAlertSending(true);
     setAlertResults([]);
@@ -556,7 +587,18 @@ export default function MarketingView({
           id="tab-review"
         >
           <MessageSquare className="h-4 w-4" />
-          Checkout Reviews & Alerts
+          Checkout Reviews
+        </button>
+
+        <button
+          onClick={() => setSubTab('alerts')}
+          className={`pb-2.5 px-1 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+            subTab === 'alerts' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'
+          }`}
+          id="tab-alerts"
+        >
+          <Bell className="h-4 w-4" />
+          Utility Alerts
         </button>
 
         <button
@@ -1005,10 +1047,9 @@ export default function MarketingView({
         </div>
       )}
 
-      {/* ── REVIEW + LOADSHEDDING TAB ── */}
+      {/* ── CHECKOUT REVIEWS TAB ── */}
       {subTab === 'review' && (
         <div className="space-y-6" id="review-tab-container">
-
           {/* Checkout Review Automation Panel */}
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-6" id="review-automation-panel">
             <div id="review-auto-headers">
@@ -1090,48 +1131,102 @@ export default function MarketingView({
 
             {/* Direct WhatsApp Reviews List */}
             <div className="border-t border-gray-100 pt-6 space-y-4" id="direct-reviews-list-block">
-              <div>
-                <h5 className="font-semibold text-gray-800 text-xs">Direct WhatsApp Reviews Ingested</h5>
-                <p className="text-[11px] text-gray-400">Direct rating and feedback replies matched and stored from customer numbers.</p>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h5 className="font-semibold text-gray-800 text-xs">Direct WhatsApp Reviews Ingested</h5>
+                  <p className="text-[11px] text-gray-400">Direct rating and feedback replies matched and stored from customer numbers.</p>
+                </div>
+
+                {/* Reviews Search & Rating Filter Controls */}
+                <div className="flex flex-col sm:flex-row gap-2.5 w-full md:w-auto">
+                  <input
+                    type="text"
+                    placeholder="Search reviews..."
+                    value={reviewSearchQuery}
+                    onChange={(e) => setReviewSearchQuery(e.target.value)}
+                    className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none w-full sm:w-64"
+                    id="review-search-input"
+                  />
+                  <select
+                    value={reviewRatingFilter}
+                    onChange={(e) => setReviewRatingFilter(e.target.value)}
+                    className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none bg-white text-gray-700 w-full sm:w-40"
+                    id="review-rating-select"
+                  >
+                    <option value="all">All Ratings</option>
+                    <option value="5">5 Stars</option>
+                    <option value="4">4 Stars</option>
+                    <option value="3">3 Stars</option>
+                    <option value="2">2 Stars</option>
+                    <option value="1">1 Star</option>
+                    <option value="no-rating">No Star Rating</option>
+                  </select>
+                </div>
               </div>
 
               <div className="space-y-3" id="direct-reviews-container">
-                {bookings.filter((b: any) => b.reviewCollected).length > 0 ? (
-                  bookings.filter((b: any) => b.reviewCollected).map((b: any) => (
-                    <div key={b.id} className="p-4 bg-gray-50 border border-gray-100 rounded-xl space-y-2 text-xs" id={`review-card-${b.id}`}>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="font-bold text-gray-800">{b.customerName}</span>
-                          <span className="text-[10px] text-gray-400 block mt-0.5">{b.roomName}</span>
+                {(() => {
+                  const collectedReviews = bookings.filter((b: any) => b.reviewCollected);
+                  const filteredReviews = collectedReviews.filter((b: any) => {
+                    const matchesSearch = reviewSearchQuery.trim() === '' || 
+                      b.customerName?.toLowerCase().includes(reviewSearchQuery.toLowerCase()) ||
+                      b.roomName?.toLowerCase().includes(reviewSearchQuery.toLowerCase()) ||
+                      b.reviewFeedback?.toLowerCase().includes(reviewSearchQuery.toLowerCase());
+                    
+                    let matchesRating = true;
+                    if (reviewRatingFilter !== 'all') {
+                      if (reviewRatingFilter === 'no-rating') {
+                        matchesRating = !b.reviewRating;
+                      } else {
+                        matchesRating = b.reviewRating === parseInt(reviewRatingFilter, 10);
+                      }
+                    }
+                    return matchesSearch && matchesRating;
+                  });
+
+                  return filteredReviews.length > 0 ? (
+                    filteredReviews.map((b: any) => (
+                      <div key={b.id} className="p-4 bg-gray-50 border border-gray-100 rounded-xl space-y-2 text-xs" id={`review-card-${b.id}`}>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-bold text-gray-800">{b.customerName}</span>
+                            <span className="text-[10px] text-gray-400 block mt-0.5">{b.roomName}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {b.reviewRating ? (
+                              Array.from({ length: 5 }).map((_, i) => (
+                                <span key={i} className={`text-sm ${i < b.reviewRating ? 'text-amber-400' : 'text-gray-200'}`}>★</span>
+                              ))
+                            ) : (
+                              <span className="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded font-semibold uppercase">No Star Rating</span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1">
-                          {b.reviewRating ? (
-                            Array.from({ length: 5 }).map((_, i) => (
-                              <span key={i} className={`text-sm ${i < b.reviewRating ? 'text-amber-400' : 'text-gray-200'}`}>★</span>
-                            ))
-                          ) : (
-                            <span className="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded font-semibold uppercase">No Star Rating</span>
-                          )}
+                        <p className="text-gray-600 italic bg-white p-2.5 rounded-lg border border-gray-100/50 leading-relaxed font-serif">
+                          "{b.reviewFeedback || 'No feedback comments provided.'}"
+                        </p>
+                        <div className="text-[9px] text-gray-400 font-mono text-right">
+                          Received: {new Date(b.updatedAt || b.checkOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </div>
                       </div>
-                      <p className="text-gray-600 italic bg-white p-2.5 rounded-lg border border-gray-100/50 leading-relaxed font-serif">
-                        "{b.reviewFeedback || 'No feedback comments provided.'}"
-                      </p>
-                      <div className="text-[9px] text-gray-400 font-mono text-right">
-                        Received: {new Date(b.updatedAt || b.checkOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </div>
+                    ))
+                  ) : (
+                    <div className="p-6 border border-dashed border-gray-200 rounded-xl text-center text-xs text-gray-400" id="no-reviews-placeholder">
+                      {collectedReviews.length > 0 
+                        ? 'No direct reviews match your search or rating criteria.' 
+                        : 'No direct WhatsApp reviews ingested yet. Reviews are collected dynamically when guests reply to checkout messages.'}
                     </div>
-                  ))
-                ) : (
-                  <div className="p-6 border border-dashed border-gray-200 rounded-xl text-center text-xs text-gray-400" id="no-reviews-placeholder">
-                    No direct WhatsApp reviews ingested yet. Reviews are collected dynamically when guests reply to checkout messages.
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             </div>
           </div>
+        </div>
+      )}
 
-          {/* ── LOADSHEDDING / UTILITY ALERTS ── */}
+      {/* ── UTILITY ALERTS TAB ── */}
+      {subTab === 'alerts' && (
+        <div className="space-y-6" id="alerts-tab-container">
           <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden" id="utility-alerts-panel">
             <div className="bg-gradient-to-r from-amber-50 to-orange-50 px-6 py-4 border-b border-amber-100 flex items-center justify-between" id="utility-header">
               <div className="flex items-center gap-3">
@@ -1232,12 +1327,37 @@ export default function MarketingView({
                 </div>
               )}
 
-              {/* Guest list */}
+              {/* Guest list with Search & Filter */}
               {alertableGuests.length > 0 && (
-                <div className="space-y-2" id="alertable-guests-list">
+                <div className="space-y-3" id="alertable-guests-list">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-gray-50/50 p-3 rounded-xl border border-gray-100">
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        placeholder="Search guests (name, phone, room)..."
+                        value={alertGuestSearchQuery}
+                        onChange={(e) => setAlertGuestSearchQuery(e.target.value)}
+                        className="w-full px-3 py-1.5 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-amber-400 focus:outline-none"
+                        id="alert-guest-search-input"
+                      />
+                    </div>
+                    <div>
+                      <select
+                        value={alertGuestStatusFilter}
+                        onChange={(e) => setAlertGuestStatusFilter(e.target.value)}
+                        className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-amber-400 focus:outline-none bg-white text-gray-700 w-full sm:w-44"
+                        id="alert-guest-status-select"
+                      >
+                        <option value="all">All Statuses</option>
+                        <option value="CHECKED_IN">Checked In</option>
+                        <option value="CONFIRMED">Upcoming/Confirmed</option>
+                      </select>
+                    </div>
+                  </div>
+
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                     <span className="text-[10px] font-bold text-gray-400 uppercase">
-                      Current & Arriving Guests ({selectedAlertPhones.length} of {alertableGuests.length} Selected)
+                      Current & Arriving Guests ({selectedAlertPhones.filter(phone => filteredAlertGuests.some(g => g.customerPhone === phone)).length} of {filteredAlertGuests.length} Selected)
                     </span>
                     <div className="flex gap-2">
                       <button
@@ -1259,41 +1379,48 @@ export default function MarketingView({
                       </button>
                     </div>
                   </div>
-                  <div className="border border-gray-100 rounded-xl divide-y divide-gray-50 max-h-40 overflow-y-auto bg-gray-50/20">
-                    {alertableGuests.map((b) => {
-                      const isSelected = selectedAlertPhones.includes(b.customerPhone);
-                      return (
-                        <div
-                          key={b.id}
-                          onClick={() => toggleAlertPhoneSelection(b.customerPhone)}
-                          className={`flex items-center justify-between px-4 py-2.5 text-xs cursor-pointer transition-all ${
-                            isSelected ? 'bg-amber-50/40 hover:bg-amber-100/30' : 'bg-white hover:bg-gray-50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => {}} // toggled by parent click
-                              className="rounded text-amber-500 focus:ring-amber-400 h-3.5 w-3.5 cursor-pointer"
-                            />
-                            <div>
-                              <span className="font-semibold text-gray-800">{b.customerName}</span>
-                              <span className="text-gray-400 font-mono ml-2 text-[10px]">{b.customerPhone}</span>
+
+                  {filteredAlertGuests.length > 0 ? (
+                    <div className="border border-gray-100 rounded-xl divide-y divide-gray-50 max-h-40 overflow-y-auto bg-gray-50/20">
+                      {filteredAlertGuests.map((b) => {
+                        const isSelected = selectedAlertPhones.includes(b.customerPhone);
+                        return (
+                          <div
+                            key={b.id}
+                            onClick={() => toggleAlertPhoneSelection(b.customerPhone)}
+                            className={`flex items-center justify-between px-4 py-2.5 text-xs cursor-pointer transition-all ${
+                              isSelected ? 'bg-amber-50/40 hover:bg-amber-100/30' : 'bg-white hover:bg-gray-50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {}} // toggled by parent click
+                                className="rounded text-amber-500 focus:ring-amber-400 h-3.5 w-3.5 cursor-pointer"
+                              />
+                              <div>
+                                <span className="font-semibold text-gray-800">{b.customerName}</span>
+                                <span className="text-gray-400 font-mono ml-2 text-[10px]">{b.customerPhone}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500 text-[10px]">{b.roomName.split(' ').slice(0, 2).join(' ')}</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                b.status === 'CHECKED_IN' ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-700'
+                              }`}>
+                                {b.status}
+                              </span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-500 text-[10px]">{b.roomName.split(' ').slice(0, 2).join(' ')}</span>
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                              b.status === 'CHECKED_IN' ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-700'
-                            }`}>
-                              {b.status}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-6 border border-dashed border-gray-200 rounded-xl text-center text-xs text-gray-400" id="no-filtered-guests-placeholder">
+                      No guests match your search or status criteria.
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1301,24 +1428,24 @@ export default function MarketingView({
               {alertableGuests.length === 0 ? (
                 <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl text-xs text-gray-500 flex items-center gap-2">
                   <BellOff className="h-4 w-4 text-gray-400" />
-                  No guests currently checked in or arriving within 48 hours. Alerts will show eligible guests here automatically.
+                  No guests currently checked in or arriving within 48 hours. Outages alerts can only be sent when eligible guests are in-house.
                 </div>
               ) : (
                 <button
                   onClick={sendUtilityAlerts}
-                  disabled={alertSending || selectedAlertPhones.length === 0}
+                  disabled={alertSending || selectedAlertPhones.filter(phone => filteredAlertGuests.some(g => g.customerPhone === phone)).length === 0}
                   className="w-full sm:w-auto px-6 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm shadow-amber-200 transition-all"
                   id="send-utility-alert-btn"
                 >
                   {alertSending ? (
                     <>
                       <RefreshCw className="h-4 w-4 animate-spin" />
-                      Sending alerts to {selectedAlertPhones.length} guests...
+                      Sending alerts...
                     </>
                   ) : (
                     <>
                       <Bell className="h-4 w-4" />
-                      Send Utility Alert to {selectedAlertPhones.length} Selected Guest{selectedAlertPhones.length !== 1 ? 's' : ''}
+                      Send Utility Alert to {selectedAlertPhones.filter(phone => filteredAlertGuests.some(g => g.customerPhone === phone)).length} Selected Guest{selectedAlertPhones.filter(phone => filteredAlertGuests.some(g => g.customerPhone === phone)).length !== 1 ? 's' : ''}
                     </>
                   )}
                 </button>
@@ -1608,89 +1735,181 @@ export default function MarketingView({
       {/* WhatsApp Logs Audit Panel */}
       {subTab === 'logs' && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden" id="logs-panel">
-          <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between" id="logs-header">
-            <h4 className="font-semibold text-gray-900 text-xs">WhatsApp Message Dispatch Logs</h4>
-            <span className="text-xs font-mono text-gray-500">{logs.length} messages logged</span>
-          </div>
+          {(() => {
+            const uniqueMessageTypes = Array.from(new Set(logs.map(l => l.messageType).filter(Boolean)));
 
-          <div className="overflow-x-auto" id="logs-table-wrapper">
-            <table className="w-full text-left text-xs border-collapse" id="logs-table">
-              <thead>
-                <tr className="bg-gray-100/50 text-[10px] font-bold text-gray-500 border-b border-gray-100 uppercase">
-                  <th className="p-3">Logged At</th>
-                  <th className="p-3">Recipient</th>
-                  <th className="p-3">Type</th>
-                  <th className="p-3">Content</th>
-                  <th className="p-3">Direction</th>
-                  <th className="p-3">Status</th>
-                  {guesthouse.allowLogDeletion && <th className="p-3 text-right">Actions</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50" id="logs-table-body">
-                {logs.length > 0 ? (
-                  logs.slice().reverse().map((l) => (
-                    <tr key={l.id} className={`hover:bg-gray-50/50 ${l.direction === 'INBOUND' ? 'bg-emerald-50/30' : ''}`} id={`log-${l.id}`}>
-                      <td className="p-3 text-gray-400 text-[10px]">{new Date(l.createdAt).toLocaleTimeString()} - {new Date(l.createdAt).toLocaleDateString()}</td>
-                      <td className="p-3 font-mono font-medium text-gray-800">{l.phone}</td>
-                      <td className="p-3">
-                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                          l.messageType === 'PROMO' ? 'bg-amber-50 text-amber-700' :
-                          l.messageType === 'REVIEW_REQUEST' ? 'bg-teal-50 text-teal-700' :
-                          'bg-gray-100 text-gray-600'
-                        }`}>
-                          {l.messageType}
-                        </span>
-                      </td>
-                      <td className="p-3 text-gray-600 font-medium max-w-sm truncate" title={l.content}>{l.content}</td>
-                      <td className="p-3">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold ${
-                          l.direction === 'INBOUND'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-blue-50 text-blue-700 border border-blue-100'
-                        }`}>
-                          {l.direction === 'INBOUND' ? '↩ Reply' : '↗ Sent'}
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold ${
-                          l.status === 'READ' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' :
-                          l.status === 'DELIVERED' ? 'bg-green-50 text-green-700 border border-green-100' :
-                          l.status === 'SENT' ? 'bg-sky-50 text-sky-700 border border-sky-100' :
-                          l.status === 'FAILED' ? 'bg-red-50 text-red-700 border border-red-100' :
-                          'bg-amber-50 text-amber-700 border border-amber-100'
-                        }`}>
-                          {l.status === 'READ' && '👁 '}
-                          {l.status === 'DELIVERED' && '✓✓ '}
-                          {l.status === 'SENT' && '✓ '}
-                          {l.status === 'FAILED' && '✗ '}
-                          {l.status}
-                        </span>
-                      </td>
-                      {guesthouse.allowLogDeletion && (
-                        <td className="p-3 text-right">
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteLog(l.id)}
-                            className="p-1 bg-red-50 hover:bg-red-100 rounded-lg text-red-500 transition-colors"
-                            title="Delete log entry"
-                            id={`delete-log-btn-${l.id}`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </td>
+            const filteredLogs = logs.filter((l) => {
+              const customerName = customers.find(c => c.phone === l.phone)?.name || 
+                                   bookings.find(b => b.customerPhone === l.phone)?.customerName ||
+                                   'Valued Guest';
+
+              const matchesSearch = logSearchQuery.trim() === '' ||
+                l.phone?.toLowerCase().includes(logSearchQuery.toLowerCase()) ||
+                customerName.toLowerCase().includes(logSearchQuery.toLowerCase());
+
+              const matchesType = logTypeFilter === 'all' || l.messageType === logTypeFilter;
+
+              let matchesDate = true;
+              if (logDateFilter) {
+                const logDateStr = new Date(l.createdAt).toISOString().split('T')[0];
+                matchesDate = logDateStr === logDateFilter;
+              }
+
+              return matchesSearch && matchesType && matchesDate;
+            });
+
+            return (
+              <>
+                <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between" id="logs-header">
+                  <h4 className="font-semibold text-gray-900 text-xs">WhatsApp Message Dispatch Logs</h4>
+                  <span className="text-xs font-mono text-gray-500">
+                    {filteredLogs.length} of {logs.length} messages shown
+                  </span>
+                </div>
+
+                {/* Logs Filters Section */}
+                <div className="p-4 border-b border-gray-100 bg-gray-50/20 grid grid-cols-1 sm:grid-cols-3 gap-3" id="logs-filters">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase">Search Recipient</label>
+                    <input
+                      type="text"
+                      placeholder="Search name or phone..."
+                      value={logSearchQuery}
+                      onChange={(e) => setLogSearchQuery(e.target.value)}
+                      className="w-full px-3 py-1.5 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
+                      id="log-search-input"
+                    />
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase">Message Type</label>
+                    <select
+                      value={logTypeFilter}
+                      onChange={(e) => setLogTypeFilter(e.target.value)}
+                      className="w-full px-3 py-1.5 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none bg-white text-gray-700"
+                      id="log-type-select"
+                    >
+                      <option value="all">All Types</option>
+                      {uniqueMessageTypes.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase">Filter By Date</label>
+                      {logDateFilter && (
+                        <button
+                          onClick={() => setLogDateFilter('')}
+                          className="text-[9px] text-red-500 hover:text-red-700 font-bold uppercase cursor-pointer"
+                        >
+                          Clear
+                        </button>
                       )}
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={guesthouse.allowLogDeletion ? 7 : 6} className="p-12 text-center text-gray-400">
-                      No communications logged. Launch a broadcast campaign or send sandbox tests to audit messages.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                    <input
+                      type="date"
+                      value={logDateFilter}
+                      onChange={(e) => setLogDateFilter(e.target.value)}
+                      className="w-full px-3 py-1.5 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
+                      id="log-date-input"
+                    />
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto" id="logs-table-wrapper">
+                  <table className="w-full text-left text-xs border-collapse" id="logs-table">
+                    <thead>
+                      <tr className="bg-gray-100/50 text-[10px] font-bold text-gray-500 border-b border-gray-100 uppercase">
+                        <th className="p-3">Logged At</th>
+                        <th className="p-3">Recipient</th>
+                        <th className="p-3">Type</th>
+                        <th className="p-3">Content</th>
+                        <th className="p-3">Direction</th>
+                        <th className="p-3">Status</th>
+                        {guesthouse.allowLogDeletion && <th className="p-3 text-right">Actions</th>}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50" id="logs-table-body">
+                      {filteredLogs.length > 0 ? (
+                        filteredLogs.slice().reverse().map((l) => {
+                          const customerName = customers.find(c => c.phone === l.phone)?.name || 
+                                               bookings.find(b => b.customerPhone === l.phone)?.customerName ||
+                                               'Valued Guest';
+
+                          return (
+                            <tr key={l.id} className={`hover:bg-gray-50/50 ${l.direction === 'INBOUND' ? 'bg-emerald-50/30' : ''}`} id={`log-${l.id}`}>
+                              <td className="p-3 text-gray-400 text-[10px]">
+                                {new Date(l.createdAt).toLocaleTimeString()} - {new Date(l.createdAt).toLocaleDateString()}
+                              </td>
+                              <td className="p-3 font-medium text-gray-800">
+                                <div className="font-bold text-gray-900 text-xs">{customerName}</div>
+                                <div className="text-[10px] text-gray-400 font-mono mt-0.5">{l.phone}</div>
+                              </td>
+                              <td className="p-3">
+                                <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                                  l.messageType === 'PROMO' ? 'bg-amber-50 text-amber-700' :
+                                  l.messageType === 'REVIEW_REQUEST' ? 'bg-teal-50 text-teal-700' :
+                                  'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {l.messageType}
+                                </span>
+                              </td>
+                              <td className="p-3 text-gray-600 font-medium max-w-sm truncate" title={l.content}>{l.content}</td>
+                              <td className="p-3">
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold ${
+                                  l.direction === 'INBOUND'
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-blue-50 text-blue-700 border border-blue-100'
+                                }`}>
+                                  {l.direction === 'INBOUND' ? '↩ Reply' : '↗ Sent'}
+                                </span>
+                              </td>
+                              <td className="p-3">
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold ${
+                                  l.status === 'READ' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' :
+                                  l.status === 'DELIVERED' ? 'bg-green-50 text-green-700 border border-green-100' :
+                                  l.status === 'SENT' ? 'bg-sky-50 text-sky-700 border border-sky-100' :
+                                  l.status === 'FAILED' ? 'bg-red-50 text-red-700 border border-red-100' :
+                                  'bg-amber-50 text-amber-700 border border-amber-100'
+                                }`}>
+                                  {l.status === 'READ' && '👁 '}
+                                  {l.status === 'DELIVERED' && '✓✓ '}
+                                  {l.status === 'SENT' && '✓ '}
+                                  {l.status === 'FAILED' && '✗ '}
+                                  {l.status}
+                                </span>
+                              </td>
+                              {guesthouse.allowLogDeletion && (
+                                <td className="p-3 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteLog(l.id)}
+                                    className="p-1 bg-red-50 hover:bg-red-100 rounded-lg text-red-500 transition-colors cursor-pointer"
+                                    title="Delete log entry"
+                                    id={`delete-log-btn-${l.id}`}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan={guesthouse.allowLogDeletion ? 7 : 6} className="p-12 text-center text-gray-400">
+                            No logs match your filter criteria.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            );
+          })()}
         </div>
       )}
 
