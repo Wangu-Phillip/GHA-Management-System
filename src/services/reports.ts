@@ -50,7 +50,11 @@ export function compileReportData(params: {
   days?: number;
 }): ReportData {
   const days = params.days || 30;
-  const endDate = new Date('2026-06-29T23:59:59Z');
+  const hasModernBookings = params.bookings.some(b => {
+    const checkInDate = b.checkIn instanceof Date ? b.checkIn : new Date(b.checkIn);
+    return checkInDate.getTime() > new Date('2026-06-29T23:59:59Z').getTime();
+  });
+  const endDate = hasModernBookings ? new Date() : new Date('2026-06-29T23:59:59Z');
   const startDate = new Date(endDate);
   startDate.setDate(startDate.getDate() - days);
 
