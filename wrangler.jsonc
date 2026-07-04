@@ -1,28 +1,73 @@
 {
-	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "gha-management",
-	"main": "src/worker.ts",
-	"compatibility_date": "2025-05-01",
-	"compatibility_flags": [
-		"nodejs_compat"
-	],
-	"assets": {
-		"directory": "./dist/client",
-		"binding": "ASSETS",
-		"not_found_handling": "single-page-application"
-	},
-	"d1_databases": [
-		{
-			"binding": "DB",
-			"database_name": "gha-management-db",
-			"database_id": "07b8049c-8bf7-426e-bb75-bad2f47a8cb1",
-			"migrations_dir": "migrations"
-		}
-	],
-	"observability": {
-		"enabled": true
-	}
-	// Secrets (set via `wrangler secret put`):
-	//   GEMINI_API_KEY
-	//   WHATSAPP_VERIFY_TOKEN  (e.g. gha-whatsapp-verify-2026)
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gha-management",
+  "main": "src/worker.ts",
+  "compatibility_date": "2025-05-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "gha-management-db",
+      "database_id": "07b8049c-8bf7-426e-bb75-bad2f47a8cb1",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "env": {
+    // ----------------------------------------------------
+    // INSTANCE: Sunset Lodge
+    // ----------------------------------------------------
+    "sunset-lodge": {
+      "name": "gha-sunset-lodge",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "gha-db-sunset-lodge",
+          "database_id": "sunset-d1-uuid-here",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "vars": {
+        "ENVIRONMENT": "production",
+        "META_APP_ID": "111222333",
+        "META_PHONE_NUMBER_ID": "444555666",
+        "META_WABA_ID": "777888999",
+        "META_SYSTEM_USER_TOKEN": "sunset-specific-long-lived-token",
+        "FACEBOOK_AD_ACCOUNT_ID": "act_1234567890",
+        "WEBHOOK_VERIFY_TOKEN": "secure_random_handshake_string_sunset"
+      }
+    },
+    // ----------------------------------------------------
+    // INSTANCE: Ocean Breeze Retreat
+    // ----------------------------------------------------
+    "ocean-breeze": {
+      "name": "gha-ocean-breeze",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "gha-db-ocean-breeze",
+          "database_id": "oceanbreeze-d1-uuid-here",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "vars": {
+        "ENVIRONMENT": "production",
+        "META_APP_ID": "999888777",
+        "META_PHONE_NUMBER_ID": "888777666",
+        "META_WABA_ID": "555444333",
+        "META_SYSTEM_USER_TOKEN": "oceanbreeze-specific-long-lived-token",
+        "FACEBOOK_AD_ACCOUNT_ID": "act_0987654321",
+        "WEBHOOK_VERIFY_TOKEN": "secure_random_handshake_string_oceanbreeze"
+      }
+    }
+  }
 }

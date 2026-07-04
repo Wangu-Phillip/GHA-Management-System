@@ -5,8 +5,7 @@ import { generateFuturePredictions } from './services/ai';
 import {
   sendWhatsAppMessage,
   runCheckoutReviewAutomation,
-  executeMarketingCampaign,
-} from './services/whatsapp';
+  executeMarketingCampaign } from './services/whatsapp';
 import { compileReportData, convertToCSV } from './services/reports';
 import {
   fetchAdInsights,
@@ -14,8 +13,7 @@ import {
   createCampaign,
   updateCampaignBudget,
   generateMockInsights,
-  generateMockCampaigns,
-} from './services/facebook';
+  generateMockCampaigns } from './services/facebook';
 import { getOrGenerateAdvisorAdvice } from './services/facebook_ai';
 
 
@@ -78,15 +76,6 @@ const rateLimiter = (options: { limit: number; timeframeMs: number }) => {
 
 // ---- API middleware: tenant + prisma ----
 app.use('/api/*', async (c, next) => {
-  const authHeader = c.req.header('Authorization');
-  let tenantId = 'tenant-1';
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.substring(7);
-    const match = token.match(/tenant-[a-zA-Z0-9-]+/);
-    if (match) tenantId = match[0];
-  }
-  c.set('tenantId', tenantId);
-
   if (!c.env?.DB) {
     return c.json({ error: 'D1 database binding (DB) is not configured' }, 500);
   }
@@ -117,8 +106,7 @@ app.get('/api/health', async (c) => {
     dbConnected,
     mode: dbConnected ? 'LIVE' : 'DEMO',
     timestamp: new Date().toISOString(),
-    contextTenantId: c.var.tenantId,
-  });
+    contextTenantId: c.var.tenantId });
 });
 
 
@@ -136,11 +124,8 @@ app.post('/api/auth/login', async (c) => {
       return c.json({ error: 'Invalid email or password' }, 401);
     }
 
-    const guesthouse = user.guesthouseId
-      ? await c.var.prisma.guesthouse.findUnique({ where: { id: user.guesthouseId } })
-      : null;
-
-    const tenantId = user.guesthouseId || 'tenant-1';
+    const guesthouse = await c.var.prisma.guesthouse.findFirst();
+    const guesthouseId = guesthouse?.id || 'tenant-1';
 
     return c.json({
       message: 'Login successful',
@@ -149,11 +134,9 @@ app.post('/api/auth/login', async (c) => {
         email: user.email,
         name: user.name,
         role: user.role,
-        guesthouseId: user.guesthouseId,
-      },
+        guesthouseId },
       guesthouse,
-      token: `mock-jwt-token-for-${user.id}-${tenantId}-${Date.now()}`,
-    });
+      token: `mock-jwt-token-for-${user.id}-${guesthouseId}-${Date.now()}` });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
@@ -207,23 +190,19 @@ app.post('/api/auth/register', async (c) => {
     const existing = await c.var.prisma.user.findUnique({ where: { email } });
     if (existing) return c.json({ error: 'User already exists' }, 400);
 
-    let guesthouseId: string | null = null;
-    if (guesthouseName) {
-      const gh = await c.var.prisma.guesthouse.create({
-        data: { name: guesthouseName, subscriptionStatus: 'ACTIVE' },
-      });
-      guesthouseId = gh.id;
+    let gh = await c.var.prisma.guesthouse.findFirst();
+    if (!gh && guesthouseName) {
+      gh = await c.var.prisma.guesthouse.create({
+        data: { name: guesthouseName, subscriptionStatus: 'ACTIVE' } });
     }
+    const guesthouseId = gh?.id || 'tenant-1';
 
     const user = await c.var.prisma.user.create({
       data: {
         email,
         passwordHash: password,
         name,
-        role: guesthouseId ? 'TENANT_ADMIN' : 'SUPER_ADMIN',
-        guesthouseId,
-      },
-    });
+        role: 'TENANT_ADMIN' } });
 
     return c.json(
       {
@@ -233,9 +212,7 @@ app.post('/api/auth/register', async (c) => {
           email: user.email,
           name: user.name,
           role: user.role,
-          guesthouseId: user.guesthouseId,
-        },
-      },
+          guesthouseId } },
       201
     );
   } catch (err: any) {
@@ -243,416 +220,21 @@ app.post('/api/auth/register', async (c) => {
   }
 });
 
-// ==========================================
-// Super admin Helpers & Middleware
-// ==========================================
-const checkSuperAdmin = async (c: any) => {
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return false;
-  }
-  const token = authHeader.substring(7);
-  if (token.startsWith('mock-jwt-token-for-')) {
-    const suffix = token.substring('mock-jwt-token-for-'.length);
-    const tenantIdx = suffix.lastIndexOf('-tenant-');
-    let userId = '';
-    if (tenantIdx !== -1) {
-      userId = suffix.substring(0, tenantIdx);
-    } else {
-      const parts = token.split('-');
-      userId = parts[4];
-    }
-    if (userId) {
-      const user = await c.var.prisma.user.findUnique({ where: { id: userId } });
-      return user && user.role === 'SUPER_ADMIN';
-    }
-  }
-  // Support simple token fallback or Firebase verification if needed
-  return true;
-};
 
-const callFirebaseFunction = async (c: any, functionName: string, body: any) => {
-  // Functions are deployed as onRequest (regular HTTPS) - send body directly
-  const baseUrl = c.env?.FIREBASE_FUNCTIONS_URL || 'http://127.0.0.1:5001/gha-management-db/us-central1';
-  try {
-    const response = await fetch(`${baseUrl}/${functionName}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    if (response.ok) {
-      return await response.json();
-    }
-    const errBody = await response.text();
-    console.error(`Firebase function ${functionName} returned ${response.status}:`, errBody);
-    return null;
-  } catch (err) {
-    console.error(`Firebase function ${functionName} error:`, err);
-    return null;
-  }
-};
-
-// Global config for Super Admin settings (stored in memory/local DB file metadata for now)
-let platformSettings = {
-  defaultSubscriptionDurationDays: 30,
-  allowFreeTrials: true,
-  alertThresholdDays: 7,
-  defaultFeatures: {
-    facebookAds: true,
-    whatsappMarketing: true,
-    aiForecasts: true,
-    linkWhatsappNumber: true
-  }
-};
-
-// ==========================================
-// Super admin routes
-// ==========================================
-app.get('/api/super/guesthouses', async (c) => {
-  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
-  try {
-    const list = await c.var.prisma.guesthouse.findMany({
-      include: {
-        users: {
-          select: {
-            id: true,
-            role: true
-          }
-        }
-      }
-    });
-
-    // Format & parse feature flags
-    const formatted = list.map((gh: any) => {
-      let flags = platformSettings.defaultFeatures;
-      if (gh.featureFlags) {
-        try {
-          flags = JSON.parse(gh.featureFlags);
-        } catch (e) {
-          flags = platformSettings.defaultFeatures;
-        }
-      }
-
-      return {
-        ...gh,
-        isBlocked: gh.isBlocked === 1 || gh.isBlocked === true,
-        isPaused: gh.isPaused === 1 || gh.isPaused === true,
-        featureFlags: flags,
-        adminCount: gh.users.filter((u: any) => u.role === 'TENANT_ADMIN' || u.role === 'SUPER_ADMIN').length
-      };
-
-    });
-
-    return c.json(formatted);
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500);
-  }
-});
-
-app.post('/api/super/guesthouses', async (c) => {
-  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
-  try {
-    const { name, subscriptionStatus, subscriptionEndsAt, featureFlags } = await c.req.json();
-    if (!name) return c.json({ error: 'Guesthouse name is required' }, 400);
-
-    const flagsString = JSON.stringify(featureFlags || platformSettings.defaultFeatures);
-
-    const gh = await c.var.prisma.guesthouse.create({
-      data: {
-        name,
-        subscriptionStatus: subscriptionStatus || 'ACTIVE',
-        subscriptionEndsAt: subscriptionEndsAt ? new Date(subscriptionEndsAt) : null,
-        featureFlags: flagsString,
-        isBlocked: false,
-        isPaused: false
-      },
-    });
-
-    // Write initial subscription history log
-    await c.var.prisma.subscriptionHistory.create({
-      data: {
-        guesthouseId: gh.id,
-        changedBy: 'SYSTEM',
-        previousStatus: 'NONE',
-        newStatus: gh.subscriptionStatus,
-        subscriptionEndsAt: gh.subscriptionEndsAt,
-        notes: 'Tenant onboarding provisioned'
-      }
-    });
-
-    return c.json(gh, 201);
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500);
-  }
-});
-
-app.put('/api/super/guesthouses/:id', async (c) => {
-  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
-  const id = c.req.param('id');
-  try {
-    const body = await c.req.json();
-    const oldGh = await c.var.prisma.guesthouse.findUnique({ where: { id } });
-    if (!oldGh) return c.json({ error: 'Guesthouse not found' }, 404);
-
-    const updateData: any = {};
-    if (body.name !== undefined) updateData.name = body.name;
-    if (body.logoUrl !== undefined) updateData.logoUrl = body.logoUrl;
-    if (body.isBlocked !== undefined) updateData.isBlocked = body.isBlocked ? 1 : 0;
-    if (body.isPaused !== undefined) updateData.isPaused = body.isPaused ? 1 : 0;
-    
-    if (body.subscriptionStatus !== undefined) {
-      updateData.subscriptionStatus = body.subscriptionStatus;
-    }
-    if (body.subscriptionEndsAt !== undefined) {
-      updateData.subscriptionEndsAt = body.subscriptionEndsAt ? new Date(body.subscriptionEndsAt) : null;
-    }
-    if (body.featureFlags !== undefined) {
-      updateData.featureFlags = JSON.stringify(body.featureFlags);
-    }
-    if (body.rooms !== undefined) {
-      updateData.rooms = Array.isArray(body.rooms) ? JSON.stringify(body.rooms) : body.rooms;
-    }
-
-    const gh = await c.var.prisma.guesthouse.update({
-      where: { id },
-      data: updateData
-    });
-
-    // Check if subscription status or date changed, and write to history
-    const statusChanged = body.subscriptionStatus !== undefined && body.subscriptionStatus !== oldGh.subscriptionStatus;
-    const endsAtChanged = body.subscriptionEndsAt !== undefined && 
-      (oldGh.subscriptionEndsAt ? new Date(oldGh.subscriptionEndsAt).getTime() : 0) !== (body.subscriptionEndsAt ? new Date(body.subscriptionEndsAt).getTime() : 0);
-
-    if (statusChanged || endsAtChanged) {
-      await c.var.prisma.subscriptionHistory.create({
-        data: {
-          guesthouseId: id,
-          changedBy: 'SUPER_ADMIN',
-          previousStatus: oldGh.subscriptionStatus,
-          newStatus: body.subscriptionStatus || oldGh.subscriptionStatus,
-          subscriptionEndsAt: body.subscriptionEndsAt ? new Date(body.subscriptionEndsAt) : oldGh.subscriptionEndsAt,
-          notes: body.historyNotes || 'Subscription updated by Super Admin'
-        }
-      });
-    }
-
-     return c.json({
-      ...gh,
-      featureFlags: gh.featureFlags ? (() => { try { return JSON.parse(gh.featureFlags as string); } catch { return {}; } })() : {},
-      isBlocked: gh.isBlocked === 1 || gh.isBlocked === true,
-      isPaused: gh.isPaused === 1 || gh.isPaused === true,
-    });
-    
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500);
-  }
-});
-
-app.delete('/api/super/guesthouses/:id', async (c) => {
-  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
-  const id = c.req.param('id');
-  try {
-    // Delete tenant users first from Firebase Auth if they have UIDs
-    const users = await c.var.prisma.user.findMany({ where: { guesthouseId: id } });
-    for (const u of users) {
-      if (u.firebaseUid) {
-        await callFirebaseFunction(c, 'deleteTenantAdmin', { uid: u.firebaseUid });
-      }
-    }
-
-    const deleted = await c.var.prisma.guesthouse.delete({ where: { id } });
-    return c.json({ message: 'Guesthouse suspended and deleted successfully', deleted });
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500);
-  }
-});
-
-// Admin management routes
-app.get('/api/super/guesthouses/:id/admins', async (c) => {
-  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
-  const guesthouseId = c.req.param('id');
-  try {
-    const list = await c.var.prisma.user.findMany({
-      where: { guesthouseId }
-    });
-    return c.json(list);
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500);
-  }
-});
-
-app.post('/api/super/guesthouses/:id/admins', async (c) => {
-  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
-  const guesthouseId = c.req.param('id');
-  try {
-    const { name, email, password, role } = await c.req.json();
-    if (!name || !email || !password) {
-      return c.json({ error: 'Name, email, and password are required' }, 400);
-    }
-
-    // Call Firebase Auth creation
-    let firebaseUid = null;
-    const fbRes = await callFirebaseFunction(c, 'createTenantAdmin', {
-      email,
-      password,
-      name,
-      role: role || 'TENANT_ADMIN',
-      guesthouseId
-    });
-    if (fbRes && fbRes.uid) {
-      firebaseUid = fbRes.uid;
-    } else {
-      // Fallback local mock uid in case firebase functions is offline
-      firebaseUid = `mock-fb-${Date.now()}`;
-    }
-
-    const newUser = await c.var.prisma.user.create({
-      data: {
-        name,
-        email,
-        passwordHash: password,
-        role: role || 'TENANT_ADMIN',
-        guesthouseId,
-        firebaseUid
-      }
-    });
-
-    return c.json(newUser, 201);
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500);
-  }
-});
-
-app.put('/api/super/guesthouses/:id/admins/:userId', async (c) => {
-  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
-  const userId = c.req.param('userId');
-  try {
-    const { name, email, role } = await c.req.json();
-    const updated = await c.var.prisma.user.update({
-      where: { id: userId },
-      data: { name, email, role }
-    });
-    return c.json(updated);
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500);
-  }
-});
-
-app.delete('/api/super/guesthouses/:id/admins/:userId', async (c) => {
-  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
-  const userId = c.req.param('userId');
-  try {
-    const user = await c.var.prisma.user.findUnique({ where: { id: userId } });
-    if (user && user.firebaseUid) {
-      await callFirebaseFunction(c, 'deleteTenantAdmin', { uid: user.firebaseUid });
-    }
-    const deleted = await c.var.prisma.user.delete({ where: { id: userId } });
-    return c.json({ message: 'Admin deleted successfully', deleted });
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500);
-  }
-});
-
-app.post('/api/super/users/:userId/reset-password', async (c) => {
-  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
-  const userId = c.req.param('userId');
-  try {
-    const user = await c.var.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) return c.json({ error: 'User not found' }, 404);
-
-    let resetLink = null;
-    let message = 'Password reset email triggered';
-
-    if (user.firebaseUid && !user.firebaseUid.startsWith('mock-fb-')) {
-      const fbRes = await callFirebaseFunction(c, 'resetTenantUserPassword', {
-        uid: user.firebaseUid,
-        email: user.email
-      });
-      if (fbRes && fbRes.resetLink) {
-        resetLink = fbRes.resetLink;
-        message = `Reset link generated: ${resetLink}`;
-      }
-    } else {
-      message = `User has no active Firebase account. Temporary password reset simulated. Password is: Temp123!`;
-    }
-
-    return c.json({ success: true, message, resetLink });
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500);
-  }
-});
-
-app.get('/api/super/guesthouses/:id/subscription-history', async (c) => {
-  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
-  const guesthouseId = c.req.param('id');
-  try {
-    const list = await c.var.prisma.subscriptionHistory.findMany({
-      where: { guesthouseId },
-      orderBy: { createdAt: 'desc' }
-    });
-    return c.json(list);
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500);
-  }
-});
-
-app.get('/api/super/settings', async (c) => {
-  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
-  return c.json(platformSettings);
-});
-
-app.put('/api/super/settings', async (c) => {
-  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
-  try {
-    const body = await c.req.json();
-    platformSettings = {
-      ...platformSettings,
-      ...body
-    };
-    return c.json(platformSettings);
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500);
-  }
-});
-
-app.get('/api/super/stats', async (c) => {
-  if (!await checkSuperAdmin(c)) return c.json({ error: 'Unauthorized' }, 401);
-  try {
-    const [guesthouses, bookings, users] = await Promise.all([
-      c.var.prisma.guesthouse.findMany(),
-      c.var.prisma.booking.findMany(),
-      c.var.prisma.user.findMany(),
-    ]);
-    const totalRevenue = bookings
-      .filter((b) => b.status !== 'CANCELLED')
-      .reduce((sum, b) => sum + b.totalAmount, 0);
-    const activeTenants = guesthouses.filter((g: any) => g.subscriptionStatus === 'ACTIVE' && g.isBlocked !== 1 && g.isPaused !== 1).length;
-    return c.json({
-      totalGuesthouses: guesthouses.length,
-      activeSubscriptions: activeTenants,
-      totalGlobalRevenue: totalRevenue,
-      totalUsersCount: users.length,
-      totalBookingsCount: bookings.length,
-    });
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500);
-  }
-});
+// Super admin features removed (Single-Tenant conversion)
 
 app.get('/api/guesthouse', async (c) => {
-  const guesthouseId = c.req.query('guesthouseId');
-  if (!guesthouseId) return c.json({ error: 'guesthouseId query parameter is required' }, 400);
+  const guesthouseId = c.req.query('guesthouseId') || 'tenant-1';
   try {
-    const gh = await c.var.prisma.guesthouse.findUnique({ where: { id: guesthouseId } });
+    const gh = await c.var.prisma.guesthouse.findFirst();
     if (!gh) return c.json({ error: 'Guesthouse not found' }, 404);
     const flags = gh.featureFlags ? (() => { try { return JSON.parse(gh.featureFlags as string); } catch { return {}; } })() : {};
     
     return c.json({
       ...gh,
       featureFlags: flags,
-      isBlocked: gh.isBlocked === 1 || gh.isBlocked === true,
-      isPaused: gh.isPaused === 1 || gh.isPaused === true,
-    });
+      isBlocked: !!gh.isBlocked,
+      isPaused: !!gh.isPaused });
 
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -666,7 +248,7 @@ app.get('/api/bookings', async (c) => {
   const guesthouseId = c.req.query('guesthouseId');
   if (!guesthouseId) return c.json({ error: 'guesthouseId query parameter is required' }, 400);
   try {
-    const list = await c.var.prisma.booking.findMany({ where: { guesthouseId } });
+    const list = await c.var.prisma.booking.findMany();
     return c.json(list);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -686,8 +268,7 @@ app.post('/api/bookings', async (c) => {
       checkIn,
       checkOut,
       totalAmount,
-      status,
-    } = body;
+      status } = body;
     if (
       !guesthouseId ||
       !customerName ||
@@ -701,9 +282,7 @@ app.post('/api/bookings', async (c) => {
     }
 
     const created = await c.var.prisma.booking.create({
-      data: {
-        guesthouseId,
-        customerName,
+      data: { customerName,
         customerEmail,
         customerPhone,
         customerCountry: customerCountry || 'Botswana (local)',
@@ -711,28 +290,21 @@ app.post('/api/bookings', async (c) => {
         checkIn: new Date(checkIn),
         checkOut: new Date(checkOut),
         totalAmount: Number(totalAmount),
-        status: status || 'CONFIRMED',
-      },
-    });
+        status: status || 'CONFIRMED' } });
 
     // Upsert customer.
     const phoneClean = customerPhone.trim();
     await c.var.prisma.customer.upsert({
-      where: { guesthouseId_phone: { guesthouseId, phone: phoneClean } },
-      create: {
-        guesthouseId,
-        name: customerName,
+      where: { phone: phoneClean },
+      create: { name: customerName,
         email: customerEmail,
         phone: phoneClean,
         customerCountry: customerCountry || 'Botswana (local)',
-        optInPromo: false,
-      },
+        optInPromo: false },
       update: {
         name: customerName,
         ...(customerEmail ? { email: customerEmail } : {}),
-        ...(customerCountry ? { customerCountry } : {}),
-      },
-    });
+        ...(customerCountry ? { customerCountry } : {}) } });
 
     return c.json(created, 201);
   } catch (err: any) {
@@ -775,9 +347,7 @@ app.post('/api/bookings/import', async (c) => {
     for (const b of bookings) {
       if (!b.customerName || !b.customerPhone || !b.roomName || !b.checkIn || !b.checkOut) continue;
       const created = await c.var.prisma.booking.create({
-        data: {
-          guesthouseId,
-          customerName: b.customerName,
+        data: { customerName: b.customerName,
           customerEmail: b.customerEmail,
           customerPhone: b.customerPhone,
           customerCountry: b.customerCountry || 'Botswana (local)',
@@ -785,9 +355,7 @@ app.post('/api/bookings/import', async (c) => {
           checkIn: new Date(b.checkIn),
           checkOut: new Date(b.checkOut),
           totalAmount: Number(b.totalAmount || 150),
-          status: b.status || 'CONFIRMED',
-        },
-      });
+          status: b.status || 'CONFIRMED' } });
       imported.push(created);
     }
     return c.json({ message: `Successfully imported ${imported.length} bookings`, imported }, 201);
@@ -803,7 +371,7 @@ app.get('/api/customers', async (c) => {
   const guesthouseId = c.req.query('guesthouseId');
   if (!guesthouseId) return c.json({ error: 'guesthouseId query parameter is required' }, 400);
   try {
-    const list = await c.var.prisma.customer.findMany({ where: { guesthouseId } });
+    const list = await c.var.prisma.customer.findMany();
     return c.json(list);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -819,18 +387,15 @@ app.post('/api/customers', async (c) => {
     }
     const phoneClean = phone.trim();
     const customer = await c.var.prisma.customer.upsert({
-      where: { guesthouseId_phone: { guesthouseId, phone: phoneClean } },
-      create: {
-        guesthouseId,
-        name,
+      where: { phone: phoneClean },
+      create: { name,
         email,
         phone: phoneClean,
         customerCountry: customerCountry || 'Botswana (local)',
         optInPromo: !!optInPromo,
         gender,
         ageGroup,
-        groupStyle,
-      },
+        groupStyle },
       update: {
         name,
         ...(email ? { email } : {}),
@@ -838,9 +403,7 @@ app.post('/api/customers', async (c) => {
         ...(gender ? { gender } : {}),
         ...(ageGroup ? { ageGroup } : {}),
         ...(groupStyle ? { groupStyle } : {}),
-        optInPromo: !!optInPromo,
-      },
-    });
+        optInPromo: !!optInPromo } });
     return c.json(customer, 201);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -859,18 +422,14 @@ app.put('/api/customers/:id', async (c) => {
       return c.json({ error: 'Customer profile not found' }, 404);
     }
 
-    const guesthouseId = currentCustomer.guesthouseId;
+    const guesthouseId = 'tenant-1';
     const cleanPhone = phone ? phone.trim() : currentCustomer.phone;
 
     // If the phone is being changed, check for duplicates in this guesthouse
     if (phone && cleanPhone !== currentCustomer.phone) {
       const duplicate = await c.var.prisma.customer.findFirst({
-        where: {
-          guesthouseId,
-          phone: cleanPhone,
-          NOT: { id },
-        },
-      });
+        where: { phone: cleanPhone,
+          NOT: { id } } });
 
       if (duplicate) {
         return c.json({ error: `A profile with phone number "${cleanPhone}" already exists in this registry.` }, 400);
@@ -887,9 +446,7 @@ app.put('/api/customers/:id', async (c) => {
         optInPromo: typeof optInPromo === 'boolean' ? optInPromo : undefined,
         gender,
         ageGroup,
-        groupStyle,
-      },
-    });
+        groupStyle } });
     return c.json(updated);
   } catch (err: any) {
     if (err.code === 'P2002') {
@@ -916,7 +473,7 @@ app.get('/api/marketing/campaigns', async (c) => {
   const guesthouseId = c.req.query('guesthouseId');
   if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
   try {
-    const list = await c.var.prisma.campaign.findMany({ where: { guesthouseId } });
+    const list = await c.var.prisma.campaign.findMany();
     return c.json(list);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -927,7 +484,7 @@ app.get('/api/marketing/whatsapp-logs', async (c) => {
   const guesthouseId = c.req.query('guesthouseId');
   if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
   try {
-    const logs = await c.var.prisma.messageLog.findMany({ where: { guesthouseId } });
+    const logs = await c.var.prisma.messageLog.findMany();
     return c.json(logs);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -983,8 +540,7 @@ app.post('/api/marketing/campaigns', async (c) => {
     );
     return c.json({
       message: `Campaign dispatch completed. Transmitted ${report.sent} messages of ${report.totalOptIn} opted-in subscribers.`,
-      report,
-    });
+      report });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
@@ -1024,8 +580,7 @@ app.post('/api/marketing/whatsapp-send', async (c) => {
     const waConfig = {
       phoneId: gh.whatsappPhoneId,
       token: gh.whatsappToken,
-      businessId: gh.whatsappBusinessId || undefined,
-    };
+      businessId: gh.whatsappBusinessId || undefined };
 
     const result = await sendWhatsAppMessage(c.var.prisma, {
       guesthouseId,
@@ -1033,16 +588,13 @@ app.post('/api/marketing/whatsapp-send', async (c) => {
       content,
       messageType: messageType || 'GENERAL',
       bookingId,
-      config: waConfig,
-    });
+      config: waConfig });
 
     if (messageType === 'REVIEW_REQUEST' && bookingId) {
       await (c.var.prisma as any).booking.update({
         where: { id: bookingId },
         data: {
-          reviewMessageStatus: result.success ? 'SENT' : 'FAILED',
-        },
-      });
+          reviewMessageStatus: result.success ? 'SENT' : 'FAILED' } });
     }
 
     return c.json(result);
@@ -1055,9 +607,7 @@ app.post('/api/marketing/whatsapp-send', async (c) => {
 async function performClearDummyData(prisma: any, guesthouseId: string) {
   // Delete mock MessageLogs (IDs: msg-1, msg-2, etc. or IDs starting with mock-)
   await prisma.messageLog.deleteMany({
-    where: {
-      guesthouseId,
-      OR: [
+    where: { OR: [
         { id: { in: ['msg-1', 'msg-2', 'msg-2-reply', 'msg-3', 'msg-4', 'msg-5'] } },
         { id: { startsWith: 'mock-msg-' } }
       ]
@@ -1066,33 +616,25 @@ async function performClearDummyData(prisma: any, guesthouseId: string) {
 
   // Delete mock Campaigns
   await prisma.campaign.deleteMany({
-    where: {
-      guesthouseId,
-      id: { in: ['camp-1', 'camp-2'] }
+    where: { id: { in: ['camp-1', 'camp-2'] }
     }
   });
 
   // Delete mock Bookings
   await prisma.booking.deleteMany({
-    where: {
-      guesthouseId,
-      id: { in: ['booking-1', 'booking-2', 'booking-3', 'booking-4', 'booking-5'] }
+    where: { id: { in: ['booking-1', 'booking-2', 'booking-3', 'booking-4', 'booking-5'] }
     }
   });
 
   // Delete mock Customers
   await prisma.customer.deleteMany({
-    where: {
-      guesthouseId,
-      id: { in: ['cust-1', 'cust-2', 'cust-3', 'cust-4'] }
+    where: { id: { in: ['cust-1', 'cust-2', 'cust-3', 'cust-4'] }
     }
   });
 
   // Delete mock Facebook Campaigns & Insights under 'act_demo'
   await prisma.facebookCampaign.deleteMany({
-    where: {
-      guesthouseId,
-      OR: [
+    where: { OR: [
         { adAccountId: 'act_demo' },
         { id: { startsWith: 'mock-' } }
       ]
@@ -1100,16 +642,12 @@ async function performClearDummyData(prisma: any, guesthouseId: string) {
   });
 
   await prisma.facebookInsight.deleteMany({
-    where: {
-      guesthouseId,
-      adAccountId: 'act_demo'
+    where: { adAccountId: 'act_demo'
     }
   });
 
   // Clear AI Advisor Cache for this guesthouse so advice is regenerated fresh using real data
-  await prisma.aiAdvisorCache.deleteMany({
-    where: { guesthouseId }
-  });
+  await prisma.aiAdvisorCache.deleteMany();
 }
 
 app.post('/api/marketing/clear-dummy-data', async (c) => {
@@ -1167,8 +705,7 @@ app.put('/api/marketing/whatsapp-settings', async (c) => {
 
     return c.json({
       message: 'Guesthouse marketing settings and custom properties updated successfully',
-      guesthouse: updated,
-    });
+      guesthouse: updated });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
@@ -1186,8 +723,7 @@ app.post('/api/marketing/whatsapp-automations/trigger-review', async (c) => {
         message: 'WhatsApp API is not configured. Review messages cannot be sent. Please add your WhatsApp credentials in Settings first.',
         processedCheckoutsTodayCount: 0,
         messagesSuccessfullyDispatchedCount: 0,
-        notConfigured: true,
-      }, 400);
+        notConfigured: true }, 400);
     }
 
     // Enforce feature flags and subscription
@@ -1203,8 +739,7 @@ app.post('/api/marketing/whatsapp-automations/trigger-review', async (c) => {
     return c.json({
       message: `Daily checkout review scanner completed successfully for today.`,
       processedCheckoutsTodayCount: outcome.processed,
-      messagesSuccessfullyDispatchedCount: outcome.sent,
-    });
+      messagesSuccessfullyDispatchedCount: outcome.sent });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
@@ -1262,8 +797,7 @@ app.post('/api/webhooks/whatsapp', async (c) => {
           if (wamid) {
             matchingLog = await (prisma as any).messageLog.findFirst({
               where: { wamid, direction: 'OUTBOUND' },
-              orderBy: { createdAt: 'desc' },
-            });
+              orderBy: { createdAt: 'desc' } });
           }
 
           // Step 2: fallback — find most recent OUTBOUND log to this phone number
@@ -1272,8 +806,7 @@ app.post('/api/webhooks/whatsapp', async (c) => {
             const recentLogs: any[] = await (prisma as any).messageLog.findMany({
               where: { direction: 'OUTBOUND' },
               orderBy: { createdAt: 'desc' },
-              take: 200,
-            });
+              take: 200 });
             matchingLog = recentLogs.find(
               (l: any) => l.phone.replace(/\D/g, '').endsWith(recipientPhone.slice(-9))
             ) || null;
@@ -1281,16 +814,14 @@ app.post('/api/webhooks/whatsapp', async (c) => {
 
           if (matchingLog) {
             const statusPriority: Record<string, number> = {
-              PENDING: 0, SENT: 1, DELIVERED: 2, READ: 3, FAILED: -1,
-            };
+              PENDING: 0, SENT: 1, DELIVERED: 2, READ: 3, FAILED: -1 };
             const currentPriority = statusPriority[matchingLog.status] ?? 0;
             const incomingPriority = statusPriority[newStatus] ?? 0;
             // Only upgrade status (never downgrade READ → SENT, etc.)
             if (incomingPriority > currentPriority || newStatus === 'FAILED') {
               await (prisma as any).messageLog.update({
                 where: { id: matchingLog.id },
-                data: { status: newStatus, ...(wamid ? { wamid } : {}) },
-              });
+                data: { status: newStatus, ...(wamid ? { wamid } : {}) } });
             }
           }
         }
@@ -1312,25 +843,19 @@ app.post('/api/webhooks/whatsapp', async (c) => {
           const outboundRef = await (prisma as any).messageLog.findFirst({
             where: {
               phone: { contains: fromPhone.slice(-8) },
-              direction: 'OUTBOUND',
-            },
-            orderBy: { createdAt: 'desc' },
-          });
+              direction: 'OUTBOUND' },
+            orderBy: { createdAt: 'desc' } });
 
           const guesthouseId: string = outboundRef?.guesthouseId || 'tenant-1';
 
           // Log the inbound reply
           await (prisma as any).messageLog.create({
-            data: {
-              guesthouseId,
-              phone: fromPhone,
+            data: { phone: fromPhone,
               wamid,
               direction: 'INBOUND',
               messageType: 'GENERAL',
               content: msgText,
-              status: 'READ',
-            },
-          });
+              status: 'READ' } });
 
           // Check if the reply is a response to a checkout review request
           if (outboundRef && outboundRef.messageType === 'REVIEW_REQUEST' && outboundRef.bookingId) {
@@ -1344,9 +869,7 @@ app.post('/api/webhooks/whatsapp', async (c) => {
               data: {
                 reviewCollected: true,
                 reviewRating,
-                reviewFeedback,
-              },
-            });
+                reviewFeedback } });
             console.log(`[Webhook Review] Ingested review rating: ${reviewRating}, feedback: "${reviewFeedback.substring(0, 50)}..."`);
           }
 
@@ -1355,36 +878,26 @@ app.post('/api/webhooks/whatsapp', async (c) => {
           const positiveKeywords = [
             'book', 'booking', 'reserve', 'reservation', 'yes', 'interested',
             'confirm', 'coming', 'sounds great', 'perfect', 'count me in',
-            'great offer', 'we will come', 'see you', 'noted', 'i will',
-          ];
+            'great offer', 'we will come', 'see you', 'noted', 'i will' ];
           const lowerMsg = msgText.toLowerCase();
           const isPositive = positiveKeywords.some((kw) => lowerMsg.includes(kw));
 
           if (isPositive) {
             // Find or create the customer record
             let customer = await (prisma as any).customer.findFirst({
-              where: { guesthouseId, phone: { contains: fromPhone.slice(-8) } },
-            });
+              where: { phone: { contains: fromPhone.slice(-8) } } });
             if (!customer) {
               customer = await (prisma as any).customer.create({
-                data: {
-                  guesthouseId,
-                  name: senderName,
+                data: { name: senderName,
                   phone: fromPhone,
                   email: '',
-                  optInPromo: true,
-                },
-              });
+                  optInPromo: true } });
             }
 
             // Check if booking already exists for this phone in the near-future
             const upcomingBooking = await (prisma as any).booking.findFirst({
-              where: {
-                guesthouseId,
-                customerPhone: { contains: fromPhone.slice(-8) },
-                checkIn: { gte: new Date() },
-              },
-            });
+              where: { customerPhone: { contains: fromPhone.slice(-8) },
+                checkIn: { gte: new Date() } } });
 
             // Create a CONFIRMED follow-up booking if none found
             if (!upcomingBooking) {
@@ -1393,9 +906,7 @@ app.post('/api/webhooks/whatsapp', async (c) => {
               const checkOut = new Date(checkIn);
               checkOut.setDate(checkOut.getDate() + 2);
               await (prisma as any).booking.create({
-                data: {
-                  guesthouseId,
-                  customerName: senderName,
+                data: { customerName: senderName,
                   customerEmail: customer.email || 'guest@example.com',
                   customerPhone: fromPhone,
                   roomName: 'TBC — Awaiting Guest Confirmation',
@@ -1403,9 +914,7 @@ app.post('/api/webhooks/whatsapp', async (c) => {
                   checkOut,
                   status: 'CONFIRMED',
                   totalAmount: 0,
-                  notes: `Auto-created from WhatsApp inbound reply: "${msgText.substring(0, 120)}"`,
-                },
-              });
+                  notes: `Auto-created from WhatsApp inbound reply: "${msgText.substring(0, 120)}"` } });
             }
           }
         }
@@ -1428,8 +937,7 @@ app.get('/api/employees', async (c) => {
     const guesthouseId = c.req.query('guesthouseId');
     if (!guesthouseId) return c.json({ error: 'guesthouseId query parameter is required' }, 400);
     const users = await c.var.prisma.user.findMany({
-      where: { guesthouseId, NOT: { role: 'SUPER_ADMIN' } },
-    });
+      where: { NOT: { role: 'SUPER_ADMIN' } } });
     return c.json(users);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -1438,9 +946,9 @@ app.get('/api/employees', async (c) => {
 
 app.post('/api/employees', async (c) => {
   try {
-    const { name, email, role, password, guesthouseId } = await c.req.json();
-    if (!name || !email || !role || !guesthouseId) {
-      return c.json({ error: 'name, email, role, and guesthouseId are required' }, 400);
+    const { name, email, role, password } = await c.req.json();
+    if (!name || !email || !role) {
+      return c.json({ error: 'name, email, and role are required' }, 400);
     }
     const existing = await c.var.prisma.user.findUnique({ where: { email } });
     if (existing) return c.json({ error: 'A user with this email already exists' }, 400);
@@ -1449,10 +957,7 @@ app.post('/api/employees', async (c) => {
         name,
         email,
         role,
-        passwordHash: password || 'sales123',
-        guesthouseId,
-      },
-    });
+        passwordHash: password || 'sales123' } });
     return c.json(created, 201);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -1500,8 +1005,7 @@ app.delete('/api/guesthouse/:id', async (c) => {
     const deleted = await c.var.prisma.guesthouse.delete({ where: { id } });
     return c.json({
       message: 'Guesthouse and all associated data deleted successfully',
-      deleted,
-    });
+      deleted });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
@@ -1516,7 +1020,7 @@ app.get('/api/analytics/ai-forecast', async (c) => {
   try {
     const gh = await c.var.prisma.guesthouse.findUnique({ where: { id: guesthouseId } });
     if (!gh) return c.json({ error: 'Guesthouse not found' }, 404);
-    const bookings = await c.var.prisma.booking.findMany({ where: { guesthouseId } });
+    const bookings = await c.var.prisma.booking.findMany();
     const forecast = await generateFuturePredictions(bookings as any, gh.name, c.env?.GEMINI_API_KEY);
     return c.json(forecast);
   } catch (err: any) {
@@ -1535,17 +1039,15 @@ app.get('/api/reports/compiled', async (c) => {
     const gh = await c.var.prisma.guesthouse.findUnique({ where: { id: guesthouseId } });
     if (!gh) return c.json({ error: 'Guesthouse not found' }, 404);
     const [bookings, customers, logs] = await Promise.all([
-      c.var.prisma.booking.findMany({ where: { guesthouseId } }),
-      c.var.prisma.customer.findMany({ where: { guesthouseId } }),
-      c.var.prisma.messageLog.findMany({ where: { guesthouseId } }),
-    ]);
+      c.var.prisma.booking.findMany(),
+      c.var.prisma.customer.findMany(),
+      c.var.prisma.messageLog.findMany() ]);
     const report = compileReportData({
       guesthouseName: gh.name,
       bookings: bookings as any,
       customers: customers as any,
       logs: logs as any,
-      days: days ? Number(days) : 30,
-    });
+      days: days ? Number(days) : 30 });
     return c.json(report);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -1559,7 +1061,7 @@ app.get('/api/reports/download-csv', async (c) => {
     return c.text('guesthouseId is required');
   }
   try {
-    const bookings = await c.var.prisma.booking.findMany({ where: { guesthouseId } });
+    const bookings = await c.var.prisma.booking.findMany();
     const rows = bookings.map((b) => ({
       id: b.id,
       customerName: b.customerName,
@@ -1568,8 +1070,7 @@ app.get('/api/reports/download-csv', async (c) => {
       checkIn: b.checkIn.toISOString().split('T')[0],
       checkOut: b.checkOut.toISOString().split('T')[0],
       totalAmount: b.totalAmount,
-      status: b.status,
-    }));
+      status: b.status }));
     const csv = convertToCSV(
       ['Booking ID', 'Customer Name', 'Phone Number', 'Room Assigned', 'Check-In Date', 'Check-Out Date', 'Price Collected', 'Status'],
       ['id', 'customerName', 'customerPhone', 'roomName', 'checkIn', 'checkOut', 'totalAmount', 'status'],
@@ -1595,8 +1096,7 @@ function getDateRange(days: number): { since: string; until: string } {
   since.setDate(since.getDate() - days);
   return {
     since: since.toISOString().split('T')[0],
-    until: until.toISOString().split('T')[0],
-  };
+    until: until.toISOString().split('T')[0] };
 }
 
 // GET /api/facebook/account — get connected Ad Account for this guesthouse
@@ -1605,8 +1105,7 @@ app.get('/api/facebook/account', async (c) => {
   if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
   try {
     const account = await (c.var.prisma as any).facebookAdAccount.findUnique({
-      where: { guesthouseId },
-    });
+      where: {} });
     return c.json(account || null);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -1645,10 +1144,9 @@ app.put('/api/facebook/account', async (c) => {
     }
 
     const account = await (c.var.prisma as any).facebookAdAccount.upsert({
-      where: { guesthouseId },
-      create: { guesthouseId, adAccountId: normalizedAdAccountId, accessToken, pageId, accountName, currency, timezone },
-      update: { adAccountId: normalizedAdAccountId, accessToken, pageId, accountName, currency, timezone, updatedAt: new Date() },
-    });
+      where: {},
+      create: { adAccountId: normalizedAdAccountId, accessToken, pageId, accountName, currency, timezone },
+      update: { adAccountId: normalizedAdAccountId, accessToken, pageId, accountName, currency, timezone, updatedAt: new Date() } });
 
     // Auto-clear dummy data now that real Facebook keys are applied
     console.log(`[Facebook Settings] Real keys applied for ${guesthouseId}. Clearing dummy/seeded records.`);
@@ -1667,8 +1165,7 @@ app.post('/api/facebook/sync', async (c) => {
     if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
 
     const account = await (c.var.prisma as any).facebookAdAccount.findUnique({
-      where: { guesthouseId },
-    });
+      where: {} });
 
     // Cap the sync window to 730 days (2 years) to stay safely within Meta's 37-month query limit
     const syncDays = 730;
@@ -1686,8 +1183,7 @@ app.post('/api/facebook/sync', async (c) => {
       insights = await fetchAdInsights(account.accessToken, account.adAccountId, {
         since,
         until,
-        level: 'campaign',
-      });
+        level: 'campaign' });
       campaigns = await fetchCampaigns(account.accessToken, account.adAccountId);
     }
 
@@ -1705,15 +1201,12 @@ app.post('/api/facebook/sync', async (c) => {
           dailyBudget: camp.daily_budget ? Number(camp.daily_budget) / 100 : null,
           lifetimeBudget: camp.lifetime_budget ? Number(camp.lifetime_budget) / 100 : null,
           startTime: camp.start_time ? new Date(camp.start_time) : null,
-          stopTime: camp.stop_time ? new Date(camp.stop_time) : null,
-        },
+          stopTime: camp.stop_time ? new Date(camp.stop_time) : null },
         update: {
           name: camp.name,
           status: camp.status,
           dailyBudget: camp.daily_budget ? Number(camp.daily_budget) / 100 : null,
-          syncedAt: new Date(),
-        },
-      });
+          syncedAt: new Date() } });
     }
 
     // Upsert normalised insights into D1
@@ -1725,12 +1218,8 @@ app.post('/api/facebook/sync', async (c) => {
             adAccountId: account?.adAccountId || 'act_demo',
             objectId: ins.objectId,
             objectLevel: ins.objectLevel,
-            date: ins.date,
-          },
-        },
-        create: {
-          guesthouseId,
-          adAccountId: account?.adAccountId || 'act_demo',
+            date: ins.date } },
+        create: { adAccountId: account?.adAccountId || 'act_demo',
           objectId: ins.objectId,
           objectLevel: ins.objectLevel,
           objectName: ins.objectName,
@@ -1743,8 +1232,7 @@ app.post('/api/facebook/sync', async (c) => {
           cpm: ins.cpm,
           ctr: ins.ctr,
           cpc: ins.cpc,
-          roas: ins.roas,
-        },
+          roas: ins.roas },
         update: {
           impressions: ins.impressions,
           clicks: ins.clicks,
@@ -1755,9 +1243,7 @@ app.post('/api/facebook/sync', async (c) => {
           ctr: ins.ctr,
           cpc: ins.cpc,
           roas: ins.roas,
-          syncedAt: new Date(),
-        },
-      });
+          syncedAt: new Date() } });
       upsertedCount++;
     }
 
@@ -1765,8 +1251,7 @@ app.post('/api/facebook/sync', async (c) => {
       message: `Sync complete. Upserted ${upsertedCount} insight rows and ${campaigns.length} campaigns.`,
       mode: isMockMode ? 'DEMO_MOCK' : 'LIVE_GRAPH_API',
       insightCount: upsertedCount,
-      campaignCount: campaigns.length,
-    });
+      campaignCount: campaigns.length });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
@@ -1778,9 +1263,8 @@ app.get('/api/facebook/campaigns', async (c) => {
   if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
   try {
     const campaigns = await (c.var.prisma as any).facebookCampaign.findMany({
-      where: { guesthouseId },
-      orderBy: { createdAt: 'desc' },
-    });
+      where: {},
+      orderBy: { createdAt: 'desc' } });
     return c.json(campaigns);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -1797,8 +1281,7 @@ app.post('/api/facebook/campaigns', async (c) => {
     }
 
     const account = await (c.var.prisma as any).facebookAdAccount.findUnique({
-      where: { guesthouseId },
-    });
+      where: {} });
 
     const isMockMode = !account || !account.accessToken || account.accessToken === 'DEMO_MODE';
     const campaignId = isMockMode
@@ -1809,8 +1292,7 @@ app.post('/api/facebook/campaigns', async (c) => {
           dailyBudget,
           lifetimeBudget,
           startTime,
-          stopTime,
-        })).id;
+          stopTime })).id;
 
     const created = await (c.var.prisma as any).facebookCampaign.create({
       data: {
@@ -1823,9 +1305,7 @@ app.post('/api/facebook/campaigns', async (c) => {
         dailyBudget: dailyBudget ? Number(dailyBudget) : null,
         lifetimeBudget: lifetimeBudget ? Number(lifetimeBudget) : null,
         startTime: startTime ? new Date(startTime) : null,
-        stopTime: stopTime ? new Date(stopTime) : null,
-      },
-    });
+        stopTime: stopTime ? new Date(stopTime) : null } });
 
     return c.json({ message: 'Campaign created successfully', campaign: created, mode: isMockMode ? 'DEMO' : 'LIVE' }, 201);
   } catch (err: any) {
@@ -1843,8 +1323,7 @@ app.patch('/api/facebook/campaigns/:id/budget', async (c) => {
     }
 
     const account = await (c.var.prisma as any).facebookAdAccount.findUnique({
-      where: { guesthouseId },
-    });
+      where: {} });
 
     const isMockMode = !account || !account.accessToken || account.accessToken === 'DEMO_MODE';
     if (!isMockMode) {
@@ -1853,8 +1332,7 @@ app.patch('/api/facebook/campaigns/:id/budget', async (c) => {
 
     const updated = await (c.var.prisma as any).facebookCampaign.update({
       where: { id },
-      data: { dailyBudget: Number(dailyBudget), syncedAt: new Date() },
-    });
+      data: { dailyBudget: Number(dailyBudget), syncedAt: new Date() } });
 
     return c.json({ message: 'Budget updated successfully', campaign: updated });
   } catch (err: any) {
@@ -1876,14 +1354,12 @@ app.get('/api/facebook/insights', async (c) => {
     const where: any = {
       guesthouseId,
       objectLevel: level.toUpperCase(),
-      date: { gte: since },
-    };
+      date: { gte: since } };
     if (campaignId) where.objectId = campaignId;
 
     const rows = await (c.var.prisma as any).facebookInsight.findMany({
       where,
-      orderBy: { date: 'asc' },
-    });
+      orderBy: { date: 'asc' } });
     return c.json(rows);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);

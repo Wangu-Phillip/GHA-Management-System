@@ -10,15 +10,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS "User_firebaseUid_key" ON "User"("firebaseUid"
 -- Subscription history audit log
 CREATE TABLE IF NOT EXISTS "SubscriptionHistory" (
     "id"                TEXT     NOT NULL PRIMARY KEY,
-    "guesthouseId"      TEXT     NOT NULL,
     "changedBy"         TEXT     NOT NULL,  -- super-admin userId
     "previousStatus"    TEXT     NOT NULL,
     "newStatus"         TEXT     NOT NULL,
     "subscriptionEndsAt" DATETIME,
     "notes"             TEXT,
-    "createdAt"         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "SubHistory_guesthouse_fkey"
-        FOREIGN KEY ("guesthouseId") REFERENCES "Guesthouse"("id") ON DELETE CASCADE
+    "createdAt"         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX IF NOT EXISTS "SubscriptionHistory_guesthouseId_idx"
-    ON "SubscriptionHistory"("guesthouseId");

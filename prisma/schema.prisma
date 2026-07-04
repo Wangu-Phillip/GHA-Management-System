@@ -27,19 +27,6 @@ model Guesthouse {
   featureFlags        String       @default("{\"facebookAds\":true,\"whatsappMarketing\":true,\"aiForecasts\":true,\"linkWhatsappNumber\":true}")
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
-
-  users               User[]
-  bookings            Booking[]
-  customers           Customer[]
-  campaigns           Campaign[]
-  messageLogs         MessageLog[]
-  facebookAdAccount   FacebookAdAccount?
-  facebookCampaigns   FacebookCampaign[]
-  facebookAdSets      FacebookAdSet[]
-  facebookAds         FacebookAd[]
-  facebookInsights    FacebookInsight[]
-  aiAdvisorCaches     AiAdvisorCache[]
-  subscriptionHistories SubscriptionHistory[]
 }
 
 model User {
@@ -48,8 +35,6 @@ model User {
   passwordHash String      
   name         String
   role         String      @default("TENANT_SALES")
-  guesthouseId String?
-  guesthouse   Guesthouse? @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
   firebaseUid  String?     @unique
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
@@ -57,22 +42,16 @@ model User {
 
 model SubscriptionHistory {
   id                 String     @id @default(uuid())
-  guesthouseId       String
-  guesthouse         Guesthouse @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
   changedBy          String
   previousStatus     String
   newStatus          String
   subscriptionEndsAt DateTime?
   notes              String?
   createdAt          DateTime   @default(now())
-
-  @@index([guesthouseId])
 }
 
 model Booking {
   id                  String       @id @default(uuid())
-  guesthouseId        String
-  guesthouse          Guesthouse   @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
   customerName        String
   customerEmail       String?
   customerPhone       String
@@ -95,11 +74,9 @@ model Booking {
 
 model Customer {
   id              String     @id @default(uuid())
-  guesthouseId    String
-  guesthouse      Guesthouse @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
   name            String
   email           String?
-  phone           String
+  phone           String     @unique
   customerCountry String?
   optInPromo      Boolean    @default(false)
   gender          String?
@@ -107,14 +84,10 @@ model Customer {
   groupStyle      String?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
-
-  @@unique([guesthouseId, phone])
 }
 
 model Campaign {
   id              String       @id @default(uuid())
-  guesthouseId    String
-  guesthouse      Guesthouse   @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
   name            String
   messageTemplate String
   status          String       @default("DRAFT")
@@ -127,8 +100,6 @@ model Campaign {
 
 model MessageLog {
   id           String     @id @default(uuid())
-  guesthouseId String
-  guesthouse   Guesthouse @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
   bookingId    String?
   booking      Booking?   @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   campaignId   String?
@@ -146,8 +117,6 @@ model MessageLog {
 
 model FacebookAdAccount {
   id           String    @id @default(uuid())
-  guesthouseId String    @unique
-  guesthouse   Guesthouse @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
   adAccountId  String    // e.g. act_1234567890
   accessToken  String
   pageId       String?
@@ -160,8 +129,6 @@ model FacebookAdAccount {
 
 model FacebookCampaign {
   id             String    @id  // Facebook Campaign ID
-  guesthouseId   String
-  guesthouse     Guesthouse @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
   adAccountId    String
   name           String
   status         String    @default("PAUSED")
@@ -174,14 +141,10 @@ model FacebookCampaign {
   createdAt      DateTime  @default(now())
 
   adSets         FacebookAdSet[]
-
-  @@index([guesthouseId])
 }
 
 model FacebookAdSet {
   id           String          @id  // Facebook AdSet ID
-  guesthouseId String
-  guesthouse   Guesthouse      @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
   campaignId   String
   campaign     FacebookCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   name         String
@@ -198,8 +161,6 @@ model FacebookAdSet {
 
 model FacebookAd {
   id            String        @id  // Facebook Ad ID
-  guesthouseId  String
-  guesthouse    Guesthouse    @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
   adSetId       String
   adSet         FacebookAdSet @relation(fields: [adSetId], references: [id], onDelete: Cascade)
   name          String
@@ -214,8 +175,6 @@ model FacebookAd {
 
 model FacebookInsight {
   id           String    @id @default(uuid())
-  guesthouseId String
-  guesthouse   Guesthouse @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
   adAccountId  String
   objectId     String    // campaign/adset/ad ID
   objectLevel  String    // CAMPAIGN | ADSET | AD | ACCOUNT
@@ -233,16 +192,14 @@ model FacebookInsight {
   syncedAt     DateTime  @default(now())
 
   @@unique([adAccountId, objectId, objectLevel, date])
-  @@index([guesthouseId, date])
+  @@index([date])
 }
 
 model AiAdvisorCache {
   id           String    @id @default(uuid())
-  guesthouseId String
-  guesthouse   Guesthouse @relation(fields: [guesthouseId], references: [id], onDelete: Cascade)
   windowDays   Int       @default(30)
   adviceJson   String    // Full serialized JSON from Gemini
   generatedAt  DateTime  @default(now())
 
-  @@unique([guesthouseId, windowDays])
+  @@unique([windowDays])
 }

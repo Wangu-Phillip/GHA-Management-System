@@ -13,7 +13,7 @@ export interface WhatsAppConfig {
 export async function sendWhatsAppMessage(
   prisma: AppPrisma,
   params: {
-    guesthouseId: string;
+    guesthouseId?: string;
     phone: string;
     content: string;
     messageType: 'PROMO' | 'REVIEW_REQUEST' | 'GENERAL';
@@ -58,40 +58,31 @@ export async function sendWhatsAppMessage(
       const data: any = await response.json();
       if (response.ok && data.success) {
         await prisma.messageLog.create({
-          data: {
-            guesthouseId,
-            bookingId,
+          data: { bookingId,
             campaignId,
             phone,
             wamid: data.messageId || null,
             direction: 'OUTBOUND',
             messageType,
             content,
-            status: 'DELIVERED',
-          },
-        });
+            status: 'DELIVERED' } });
         return {
           success: true,
           messageId: data.messageId || messageId,
           status: 'DELIVERED',
-          contentSent: content,
-        };
+          contentSent: content };
       }
       throw new Error(data.error || 'Firebase Cloud Function dispatch failure');
     } catch (err: any) {
       console.error(`Firebase WhatsApp dispatch failed: ${err.message}`);
       await prisma.messageLog.create({
-        data: {
-          guesthouseId,
-          bookingId,
+        data: { bookingId,
           campaignId,
           phone,
           direction: 'OUTBOUND',
           messageType,
           content,
-          status: 'FAILED',
-        },
-      });
+          status: 'FAILED' } });
       return { success: false, messageId, status: 'FAILED', contentSent: content };
     }
   }
@@ -103,8 +94,7 @@ export async function sendWhatsAppMessage(
 
       const payload: any = {
         messaging_product: 'whatsapp',
-        to: normalizedPhone,
-      };
+        to: normalizedPhone };
 
       payload.type = 'text';
       payload.text = { preview_url: true, body: content };
@@ -113,48 +103,37 @@ export async function sendWhatsAppMessage(
         method: 'POST',
         headers: {
           Authorization: `Bearer ${config.token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
+          'Content-Type': 'application/json' },
+        body: JSON.stringify(payload) });
 
       const data: any = await response.json();
       if (response.ok) {
         await prisma.messageLog.create({
-          data: {
-            guesthouseId,
-            bookingId,
+          data: { bookingId,
             campaignId,
             phone,
             wamid: data.messages?.[0]?.id || null,
             direction: 'OUTBOUND',
             messageType,
             content,
-            status: 'SENT',
-          },
-        });
+            status: 'SENT' } });
         return {
           success: true,
           messageId: data.messages?.[0]?.id || messageId,
           status: 'SENT',
-          contentSent: content,
-        };
+          contentSent: content };
       }
       throw new Error(data.error?.message || 'Meta API failure');
     } catch (err: any) {
       console.error(`Meta WhatsApp dispatch failed: ${err.message}`);
       await prisma.messageLog.create({
-        data: {
-          guesthouseId,
-          bookingId,
+        data: { bookingId,
           campaignId,
           phone,
           direction: 'OUTBOUND',
           messageType,
           content,
-          status: 'FAILED',
-        },
-      });
+          status: 'FAILED' } });
       return { success: false, messageId, status: 'FAILED', contentSent: content };
     }
   }
@@ -170,17 +149,13 @@ export async function sendWhatsAppMessage(
   }
 
   await prisma.messageLog.create({
-    data: {
-      guesthouseId,
-      bookingId,
+    data: { bookingId,
       campaignId,
       phone,
       direction: 'OUTBOUND',
       messageType,
       content,
-      status: finalStatus,
-    },
-  });
+      status: finalStatus } });
 
   // Simulate reply + occasional booking on successful promo reads.
   if (finalStatus === 'READ' && messageType === 'PROMO' && campaignId) {
@@ -189,25 +164,19 @@ export async function sendWhatsAppMessage(
         'Sounds like an amazing offer! Count me in. Just booked!',
         'Thanks for this discount. What rooms are available next weekend?',
         'Perfect! Pula! We loved our stay and would love to visit again.',
-        'Is the coupon code SUMMER15 also valid for premium suites?',
-      ];
+        'Is the coupon code SUMMER15 also valid for premium suites?' ];
       const replyContent = replies[Math.floor(Math.random() * replies.length)];
 
       await prisma.messageLog.create({
-        data: {
-          guesthouseId,
-          campaignId,
+        data: { campaignId,
           phone,
           direction: 'INBOUND',
           messageType: 'GENERAL',
           content: replyContent,
-          status: 'READ',
-        },
-      });
+          status: 'READ' } });
 
       const customer = await prisma.customer.findFirst({
-        where: { guesthouseId, phone },
-      });
+        where: { phone } });
       const customerName = customer ? customer.name : 'Valued Guest';
 
       if (Math.random() < 0.5) {
@@ -218,18 +187,14 @@ export async function sendWhatsAppMessage(
         checkOut.setDate(checkOut.getDate() + Math.floor(Math.random() * 3) + 1);
 
         await prisma.booking.create({
-          data: {
-            guesthouseId,
-            customerName,
+          data: { customerName,
             customerEmail: customer?.email || 'guest@example.com',
             customerPhone: phone,
             roomName: rooms[Math.floor(Math.random() * rooms.length)],
             checkIn,
             checkOut,
             status: Math.random() > 0.4 ? 'CHECKED_IN' : 'CONFIRMED',
-            totalAmount: Math.floor(Math.random() * 800) + 350,
-          },
-        });
+            totalAmount: Math.floor(Math.random() * 800) + 350 } });
       }
     }
   }
@@ -238,8 +203,7 @@ export async function sendWhatsAppMessage(
     success: finalStatus !== 'FAILED',
     messageId,
     status: finalStatus,
-    contentSent: content,
-  };
+    contentSent: content };
 }
 
 /**
@@ -258,21 +222,16 @@ export async function runCheckoutReviewAutomation(
   endOfDay.setHours(23, 59, 59, 999);
 
   const eligible = await prisma.booking.findMany({
-    where: {
-      guesthouseId,
-      checkOut: { gte: startOfDay, lte: endOfDay },
+    where: { checkOut: { gte: startOfDay, lte: endOfDay },
       reviewMessageStatus: 'PENDING',
-      status: { in: ['CHECKED_OUT', 'CHECKED_IN'] },
-    },
-  });
+      status: { in: ['CHECKED_OUT', 'CHECKED_IN'] } } });
 
   const waConfig: WhatsAppConfig | undefined =
     guesthouse.whatsappPhoneId && guesthouse.whatsappToken
       ? {
           phoneId: guesthouse.whatsappPhoneId,
           token: guesthouse.whatsappToken,
-          businessId: guesthouse.whatsappBusinessId || undefined,
-        }
+          businessId: guesthouse.whatsappBusinessId || undefined }
       : undefined;
 
   let processed = 0;
@@ -288,16 +247,13 @@ export async function runCheckoutReviewAutomation(
       content: reviewContent,
       messageType: 'REVIEW_REQUEST',
       bookingId: b.id,
-      config: waConfig,
-    });
+      config: waConfig });
 
     await prisma.booking.update({
       where: { id: b.id },
       data: {
         reviewMessageStatus: result.success ? 'SENT' : 'FAILED',
-        reviewCollected: result.success,
-      },
-    });
+        reviewCollected: result.success } });
 
     if (result.success) sent++;
   }
@@ -319,31 +275,22 @@ export async function executeMarketingCampaign(
   if (!guesthouse) return { totalOptIn: 0, sent: 0 };
 
   const consented = await prisma.customer.findMany({
-    where: {
-      guesthouseId,
-      optInPromo: true,
-      ...(customerIds && customerIds.length > 0 ? { id: { in: customerIds } } : {}),
-    },
-  });
+    where: { optInPromo: true,
+      ...(customerIds && customerIds.length > 0 ? { id: { in: customerIds } } : {}) } });
 
   const waConfig: WhatsAppConfig | undefined =
     guesthouse.whatsappPhoneId && guesthouse.whatsappToken
       ? {
           phoneId: guesthouse.whatsappPhoneId,
           token: guesthouse.whatsappToken,
-          businessId: guesthouse.whatsappBusinessId || undefined,
-        }
+          businessId: guesthouse.whatsappBusinessId || undefined }
       : undefined;
 
   const campaign = await prisma.campaign.create({
-    data: {
-      guesthouseId,
-      name: campaignName,
+    data: { name: campaignName,
       messageTemplate: templateContent.substring(0, 50),
       status: 'SENT',
-      scheduledAt: new Date(),
-    },
-  });
+      scheduledAt: new Date() } });
 
   let sent = 0;
   for (const c of consented) {
@@ -354,8 +301,7 @@ export async function executeMarketingCampaign(
       content: personalized,
       messageType: 'PROMO',
       campaignId: campaign.id,
-      config: waConfig,
-    });
+      config: waConfig });
     if (result.success) sent++;
   }
 

@@ -22,16 +22,13 @@ CREATE TABLE IF NOT EXISTS "User" (
     "passwordHash" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "role" TEXT NOT NULL DEFAULT 'TENANT_SALES',
-    "guesthouseId" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "User_guesthouseId_fkey" FOREIGN KEY ("guesthouseId") REFERENCES "Guesthouse" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email");
 
 CREATE TABLE IF NOT EXISTS "Booking" (
     "id" TEXT NOT NULL PRIMARY KEY,
-    "guesthouseId" TEXT NOT NULL,
     "customerName" TEXT NOT NULL,
     "customerEmail" TEXT,
     "customerPhone" TEXT NOT NULL,
@@ -44,14 +41,11 @@ CREATE TABLE IF NOT EXISTS "Booking" (
     "reviewCollected" BOOLEAN NOT NULL DEFAULT false,
     "reviewMessageStatus" TEXT NOT NULL DEFAULT 'PENDING',
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "Booking_guesthouseId_fkey" FOREIGN KEY ("guesthouseId") REFERENCES "Guesthouse" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX IF NOT EXISTS "Booking_guesthouseId_idx" ON "Booking"("guesthouseId");
 
 CREATE TABLE IF NOT EXISTS "Customer" (
     "id" TEXT NOT NULL PRIMARY KEY,
-    "guesthouseId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "email" TEXT,
     "phone" TEXT NOT NULL,
@@ -61,26 +55,22 @@ CREATE TABLE IF NOT EXISTS "Customer" (
     "ageGroup" TEXT,
     "groupStyle" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "Customer_guesthouseId_fkey" FOREIGN KEY ("guesthouseId") REFERENCES "Guesthouse" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "Customer_guesthouseId_phone_key" ON "Customer"("guesthouseId", "phone");
+CREATE UNIQUE INDEX IF NOT EXISTS "Customer_phone_key" ON "Customer"("phone");
 
 CREATE TABLE IF NOT EXISTS "Campaign" (
     "id" TEXT NOT NULL PRIMARY KEY,
-    "guesthouseId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "messageTemplate" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'DRAFT',
     "scheduledAt" DATETIME,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "Campaign_guesthouseId_fkey" FOREIGN KEY ("guesthouseId") REFERENCES "Guesthouse" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS "MessageLog" (
     "id" TEXT NOT NULL PRIMARY KEY,
-    "guesthouseId" TEXT NOT NULL,
     "bookingId" TEXT,
     "campaignId" TEXT,
     "phone" TEXT NOT NULL,
@@ -89,8 +79,6 @@ CREATE TABLE IF NOT EXISTS "MessageLog" (
     "content" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'PENDING',
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "MessageLog_guesthouseId_fkey" FOREIGN KEY ("guesthouseId") REFERENCES "Guesthouse" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "MessageLog_bookingId_fkey" FOREIGN KEY ("bookingId") REFERENCES "Booking" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "MessageLog_campaignId_fkey" FOREIGN KEY ("campaignId") REFERENCES "Campaign" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
-CREATE INDEX IF NOT EXISTS "MessageLog_guesthouseId_idx" ON "MessageLog"("guesthouseId");

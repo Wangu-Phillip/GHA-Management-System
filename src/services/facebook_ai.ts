@@ -62,25 +62,19 @@ export async function buildAdvisorContext(
 
   // Find the active connected Facebook Ad Account
   const account = await (prisma as any).facebookAdAccount.findUnique({
-    where: { guesthouseId },
-  });
+    where: {} });
   const adAccountId = account?.adAccountId || 'act_demo';
 
   // Fetch insights within window (campaign-level) matching the active adAccountId
   const insights = await (prisma as any).facebookInsight.findMany({
-    where: {
-      guesthouseId,
-      adAccountId,
+    where: { adAccountId,
       objectLevel: 'CAMPAIGN',
-      date: { gte: sinceStr },
-    },
-    orderBy: { date: 'asc' },
-  });
+      date: { gte: sinceStr } },
+    orderBy: { date: 'asc' } });
 
   // Fetch campaigns matching the active adAccountId
   const campaigns = await (prisma as any).facebookCampaign.findMany({
-    where: { guesthouseId, adAccountId },
-  });
+    where: { adAccountId } });
 
   // Aggregate per-campaign totals
   const campaignTotals: Record<string, CampaignPerformanceSummary> = {};
@@ -96,8 +90,7 @@ export async function buildAdvisorContext(
         totalConversions: 0,
         avgCtr: 0,
         avgCpc: 0,
-        avgRoas: 0,
-      };
+        avgRoas: 0 };
     }
     const t = campaignTotals[id];
     t.totalSpend += row.spend;
@@ -145,8 +138,7 @@ export async function buildAdvisorContext(
       totalClicks,
       totalConversions,
       overallCtr: Math.round(overallCtr * 100) / 100,
-      overallCpc: Math.round(overallCpc * 100) / 100,
-    },
+      overallCpc: Math.round(overallCpc * 100) / 100 },
     campaigns: campaigns.map((c: any) => ({
       id: c.id,
       name: c.name,
@@ -154,11 +146,9 @@ export async function buildAdvisorContext(
       objective: c.objective,
       dailyBudget: c.dailyBudget,
       lifetimeBudget: c.lifetimeBudget,
-      performance: campaignTotals[c.id] || null,
-    })),
+      performance: campaignTotals[c.id] || null })),
     campaignPerformance: allTotals,
-    dailySpendTrend: spendTrend,
-  };
+    dailySpendTrend: spendTrend };
 }
 
 // ─── Gemini Inference ─────────────────────────────────────────────────────────
@@ -210,11 +200,8 @@ Reply with ONLY the JSON object conforming to the schema.
                 campaignName: { type: 'STRING' },
                 currentDailyBudget: { type: 'NUMBER' },
                 suggestedDailyBudget: { type: 'NUMBER' },
-                rationale: { type: 'STRING' },
-              },
-              required: ['campaignId', 'campaignName', 'currentDailyBudget', 'suggestedDailyBudget', 'rationale'],
-            },
-          },
+                rationale: { type: 'STRING' } },
+              required: ['campaignId', 'campaignName', 'currentDailyBudget', 'suggestedDailyBudget', 'rationale'] } },
           topPerformers: {
             type: 'ARRAY',
             items: {
@@ -228,11 +215,8 @@ Reply with ONLY the JSON object conforming to the schema.
                 totalConversions: { type: 'NUMBER' },
                 avgCtr: { type: 'NUMBER' },
                 avgCpc: { type: 'NUMBER' },
-                avgRoas: { type: 'NUMBER' },
-              },
-              required: ['campaignId', 'campaignName', 'totalSpend', 'totalImpressions', 'totalClicks', 'totalConversions', 'avgCtr', 'avgCpc', 'avgRoas'],
-            },
-          },
+                avgRoas: { type: 'NUMBER' } },
+              required: ['campaignId', 'campaignName', 'totalSpend', 'totalImpressions', 'totalClicks', 'totalConversions', 'avgCtr', 'avgCpc', 'avgRoas'] } },
           bottomPerformers: {
             type: 'ARRAY',
             items: {
@@ -246,31 +230,22 @@ Reply with ONLY the JSON object conforming to the schema.
                 totalConversions: { type: 'NUMBER' },
                 avgCtr: { type: 'NUMBER' },
                 avgCpc: { type: 'NUMBER' },
-                avgRoas: { type: 'NUMBER' },
-              },
-              required: ['campaignId', 'campaignName', 'totalSpend', 'totalImpressions', 'totalClicks', 'totalConversions', 'avgCtr', 'avgCpc', 'avgRoas'],
-            },
-          },
+                avgRoas: { type: 'NUMBER' } },
+              required: ['campaignId', 'campaignName', 'totalSpend', 'totalImpressions', 'totalClicks', 'totalConversions', 'avgCtr', 'avgCpc', 'avgRoas'] } },
           audienceInsights: { type: 'STRING' },
-          outlook30Days: { type: 'STRING' },
-        },
+          outlook30Days: { type: 'STRING' } },
         required: [
           'performanceSummary',
           'budgetSuggestions',
           'topPerformers',
           'bottomPerformers',
           'audienceInsights',
-          'outlook30Days',
-        ],
-      },
-    },
-  };
+          'outlook30Days' ] } } };
 
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+    body: JSON.stringify(payload) });
 
   if (!res.ok) {
     throw new Error(`Gemini API error ${res.status}: ${await res.text()}`);
@@ -285,8 +260,7 @@ Reply with ONLY the JSON object conforming to the schema.
     ...parsed,
     generatedAt: new Date().toISOString(),
     windowDays: context.windowDays as number,
-    isFromCache: false,
-  };
+    isFromCache: false };
 }
 
 // ─── Synthetic Fallback ───────────────────────────────────────────────────────
@@ -316,16 +290,14 @@ function generateSyntheticAdvice(
           ? `High ROAS of ${c.avgRoas}x and CTR of ${c.avgCtr}% indicates strong audience-ad fit. Scale budget to capture more conversions.`
           : c.avgRoas > 1.5
           ? `Moderate performance. Maintain current spend while testing new creatives to improve CTR beyond ${c.avgCtr}%.`
-          : `Low ROAS of ${c.avgRoas}x suggests poor audience targeting or weak creative. Reduce spend and A/B test new ad copy before scaling.`,
-    })),
+          : `Low ROAS of ${c.avgRoas}x suggests poor audience targeting or weak creative. Reduce spend and A/B test new ad copy before scaling.` })),
     topPerformers,
     bottomPerformers,
     audienceInsights: `Based on CTR and conversion patterns, audiences most responsive to ${guesthouseName}'s ads appear to skew toward travel-intent users aged 25-45. Weekend campaigns consistently outperform weekday ads by ~40%, suggesting leisure travelers are your primary converting audience. Consider expanding lookalike audiences based on your highest-converting customer segments.`,
     outlook30Days: `If current budget allocation continues, expect approximately $${Math.round((overview?.totalSpend || 0) * 1.05)} in spend over the next 30 days with an estimated ${Math.round((overview?.totalConversions || 0) * 1.1)} conversions. Implementing the suggested budget reallocation could increase conversions by 15-20% without additional spend. Peak performance windows are projected for weekends and public holidays.`,
     generatedAt: new Date().toISOString(),
     windowDays,
-    isFromCache: false,
-  };
+    isFromCache: false };
 }
 
 // ─── Cache-aware Entry Point ──────────────────────────────────────────────────
@@ -348,8 +320,7 @@ export async function getOrGenerateAdvisorAdvice(
   // Check cache
   if (!forceRegenerate) {
     const cached = await (prisma as any).aiAdvisorCache.findUnique({
-      where: { guesthouseId_windowDays: { guesthouseId, windowDays } },
-    });
+      where: { windowDays } });
 
     if (cached) {
       const ageHours = (Date.now() - new Date(cached.generatedAt).getTime()) / (1000 * 60 * 60);
@@ -383,17 +354,12 @@ export async function getOrGenerateAdvisorAdvice(
 
   // Upsert into cache
   await (prisma as any).aiAdvisorCache.upsert({
-    where: { guesthouseId_windowDays: { guesthouseId, windowDays } },
-    create: {
-      guesthouseId,
-      windowDays,
-      adviceJson: JSON.stringify(advice),
-    },
+    where: { windowDays },
+    create: { windowDays,
+      adviceJson: JSON.stringify(advice) },
     update: {
       adviceJson: JSON.stringify(advice),
-      generatedAt: new Date(),
-    },
-  });
+      generatedAt: new Date() } });
 
   return advice;
 }
