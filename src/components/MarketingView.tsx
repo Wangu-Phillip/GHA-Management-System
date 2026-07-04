@@ -81,8 +81,11 @@ export default function MarketingView({
   onRefresh,
   onUpdateGuesthouse
 }: MarketingProps) {
-  const [subTab, setSubTab] = useState<'campaign' | 'review' | 'alerts' | 'logs' | 'settings'>('campaign');
+  const [subTab, setSubTab] = useState<'campaign' | 'review' | 'alerts' | 'chat' | 'logs' | 'settings'>('campaign');
   const [selectedCampId, setSelectedCampId] = useState<string | null>(null);
+  const [selectedChatPhone, setSelectedChatPhone] = useState<string | null>(null);
+  const [chatInputText, setChatInputText] = useState('');
+  const [isSendingChat, setIsSendingChat] = useState(false);
 
   // Reviews search and filter states
   const [reviewSearchQuery, setReviewSearchQuery] = useState('');
@@ -109,6 +112,78 @@ export default function MarketingView({
   useEffect(() => {
     setSelectedCustomerIds(customers.filter(c => c.optInPromo).map(c => c.id));
   }, [customers]);
+
+  // 1. Group messages by customer phone number
+  const chatConversations = React.useMemo(() => {
+    const groups: { [key: string]: MessageLog[] } = {};
+    for (const log of logs) {
+      if (!log.phone) continue;
+      const cleanPhone = log.phone.replace(/\D/g, '').slice(-8); // group by last 8 digits
+      if (!groups[cleanPhone]) {
+        groups[cleanPhone] = [];
+      }
+      groups[cleanPhone].push(log);
+    }
+
+    const list = Object.keys(groups).map((cleanPhone) => {
+      const groupLogs = groups[cleanPhone].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+      const latestLog = groupLogs[groupLogs.length - 1];
+      
+      // Find customer or booking details
+      const customer = customers.find(c => c.phone && c.phone.replace(/\D/g, '').slice(-8) === cleanPhone);
+      const booking = bookings.find(b => b.customerPhone && b.customerPhone.replace(/\D/g, '').slice(-8) === cleanPhone);
+      
+      const displayName = customer ? customer.name : (booking ? booking.customerName : 'Valued Guest');
+      const displayPhone = customer ? customer.phone : (booking ? booking.customerPhone : groupLogs[0].phone);
+
+      return {
+        cleanPhone,
+        displayName,
+        displayPhone,
+        latestLog,
+        logs: groupLogs,
+      };
+    });
+
+    // Sort by latest message date descending (most recent first)
+    return list.sort((a, b) => new Date(b.latestLog.createdAt).getTime() - new Date(a.latestLog.createdAt).getTime());
+  }, [logs, customers, bookings]);
+
+  const handleSendChatMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedChatPhone || !chatInputText.trim() || isSendingChat) return;
+
+    setIsSendingChat(true);
+    try {
+      const conversation = chatConversations.find(c => c.cleanPhone === selectedChatPhone);
+      const targetPhone = conversation ? conversation.displayPhone : selectedChatPhone;
+
+      const response = await fetch('/api/marketing/whatsapp-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          guesthouseId,
+          phone: targetPhone,
+          content: chatInputText.trim(),
+          messageType: 'GENERAL'
+        })
+      });
+
+      const data: any = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to dispatch message');
+      }
+
+      setChatInputText('');
+      await onRefresh(); // reload logs from backend to update view immediately
+    } catch (err: any) {
+      alert(`Error sending message: ${err.message}`);
+    } finally {
+      setIsSendingChat(false);
+    }
+  };
 
   const toggleCustomerSelection = (id: string) => {
     setSelectedCustomerIds(prev =>
@@ -599,6 +674,17 @@ export default function MarketingView({
         >
           <Bell className="h-4 w-4" />
           Utility Alerts
+        </button>
+
+        <button
+          onClick={() => setSubTab('chat')}
+          className={`pb-2.5 px-1 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+            subTab === 'chat' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'
+          }`}
+          id="tab-chat"
+        >
+          <MessageSquare className="h-4 w-4 text-emerald-500" />
+          WhatsApp Live Chat
         </button>
 
 
@@ -1485,6 +1571,169 @@ export default function MarketingView({
         </div>
       )}
 
+      {/* ── WHATSAPP LIVE CHAT TAB PANEL ── */}
+      {subTab === 'chat' && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden h-[600px] flex animate-fade-in" id="chat-tab-panel">
+          {/* Left Panel: Conversations List */}
+          <div className="w-80 border-r border-gray-150 flex flex-col h-full bg-gray-50/50" id="chat-sidebar">
+            <div className="p-4 border-b border-gray-155 bg-white flex items-center justify-between" id="chat-sidebar-header">
+              <div>
+                <h4 className="font-bold text-gray-900 text-xs uppercase tracking-wider">Conversations</h4>
+                <p className="text-[10px] text-gray-400 mt-0.5">{chatConversations.length} active chats</p>
+              </div>
+              <button
+                type="button"
+                onClick={onRefresh}
+                className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Refresh messages"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto divide-y divide-gray-100" id="chat-conversations-list">
+              {chatConversations.length === 0 ? (
+                <div className="p-8 text-center text-gray-400 text-xs">
+                  No chat history found.
+                </div>
+              ) : (
+                chatConversations.map((chat) => {
+                  const isActive = selectedChatPhone === chat.cleanPhone;
+                  const isLastInbound = chat.latestLog.direction === 'INBOUND';
+                  return (
+                    <button
+                      key={chat.cleanPhone}
+                      type="button"
+                      onClick={() => setSelectedChatPhone(chat.cleanPhone)}
+                      className={`w-full text-left p-4 transition-all flex flex-col gap-1 focus:outline-none ${
+                        isActive ? 'bg-indigo-50 border-l-4 border-indigo-600' : 'hover:bg-gray-100/50'
+                      }`}
+                      id={`chat-item-${chat.cleanPhone}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs font-bold ${isActive ? 'text-indigo-900' : 'text-gray-800'}`}>
+                          {chat.displayName}
+                        </span>
+                        <span className="text-[9px] text-gray-400 font-medium">
+                          {new Date(chat.latestLog.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between mt-0.5">
+                        <p className="text-[10px] text-gray-500 truncate max-w-[180px]">
+                          {chat.latestLog.direction === 'OUTBOUND' ? 'You: ' : ''}{chat.latestLog.content}
+                        </p>
+                        {isLastInbound && (
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" title="Unread reply" />
+                        )}
+                      </div>
+                      <span className="text-[9px] font-mono text-gray-400">{chat.displayPhone}</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Right Panel: Conversation Screen */}
+          <div className="flex-1 flex flex-col h-full bg-gray-50/20" id="chat-messages-container">
+            {selectedChatPhone ? (() => {
+              const activeChat = chatConversations.find(c => c.cleanPhone === selectedChatPhone);
+              if (!activeChat) return null;
+
+              return (
+                <>
+                  {/* Chat Header */}
+                  <div className="px-6 py-4 border-b border-gray-150 bg-white flex items-center justify-between shadow-sm" id="chat-header">
+                    <div>
+                      <h5 className="font-bold text-gray-900 text-xs">{activeChat.displayName}</h5>
+                      <p className="text-[10px] font-mono text-gray-500 mt-0.5">{activeChat.displayPhone}</p>
+                    </div>
+                    {/* Visual Status Indicator */}
+                    <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-[9px] font-bold text-emerald-800 uppercase tracking-wide">Live Connection</span>
+                    </div>
+                  </div>
+
+                  {/* Message Stream */}
+                  <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-[#f8fafc]" id="chat-message-stream">
+                    {activeChat.logs.map((log) => {
+                      const isInbound = log.direction === 'INBOUND';
+                      return (
+                        <div
+                          key={log.id}
+                          className={`flex w-full ${isInbound ? 'justify-start' : 'justify-end'}`}
+                          id={`chat-msg-${log.id}`}
+                        >
+                          <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 text-xs shadow-sm ${
+                            isInbound
+                              ? 'bg-white text-gray-800 rounded-tl-none border border-gray-100'
+                              : 'bg-indigo-600 text-white rounded-tr-none'
+                          }`}>
+                            <p className="leading-relaxed whitespace-pre-wrap">{log.content}</p>
+                            <div className={`text-[8px] mt-1 flex items-center gap-1 justify-end ${
+                              isInbound ? 'text-gray-400' : 'text-indigo-200'
+                            }`}>
+                              <span>
+                                {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                              {!isInbound && (
+                                <span className="font-bold">
+                                  {log.status === 'READ' ? ' ✓✓' : log.status === 'DELIVERED' ? ' ✓' : ' •'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Input form */}
+                  <form onSubmit={handleSendChatMessage} className="p-4 border-t border-gray-150 bg-white flex gap-3 items-end" id="chat-input-form">
+                    <textarea
+                      rows={1}
+                      required
+                      placeholder="Type a WhatsApp reply..."
+                      value={chatInputText}
+                      onChange={(e) => setChatInputText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendChatMessage(e);
+                        }
+                      }}
+                      className="flex-1 max-h-24 min-h-[40px] border border-gray-150 rounded-xl px-4 py-2.5 text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none bg-gray-50/50"
+                      id="chat-textarea"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isSendingChat || !chatInputText.trim()}
+                      className="p-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white rounded-xl transition-all shadow-sm focus:outline-none flex-shrink-0"
+                      id="btn-send-chat"
+                    >
+                      {isSendingChat ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                    </button>
+                  </form>
+                </>
+              );
+            })() : (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-8 text-gray-400" id="chat-placeholder">
+                <MessageSquare className="h-10 w-10 text-gray-300 mb-2 animate-bounce" />
+                <h5 className="font-bold text-gray-600 text-xs">WhatsApp Inbox</h5>
+                <p className="text-[10px] text-gray-400 mt-1 max-w-xs leading-relaxed">
+                  Select a guest conversation from the left to read their full thread and reply to inquiries in real-time.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* WhatsApp Logs Audit Panel */}
       {subTab === 'logs' && (
