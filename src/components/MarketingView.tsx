@@ -852,26 +852,40 @@ export default function MarketingView({
                   const readLogs = outboundLogs.filter(l => l.status === 'READ');
                   const readCount = readLogs.length;
                   const readPercentage = sentCount > 0 ? Math.round((readCount / sentCount) * 100) : 0;
-                  const inboundLogs = campLogs.filter(l => l.direction === 'INBOUND');
+                  
+                  const recipientPhonesClean = outboundLogs.map(l => l.phone.replace(/\D/g, '').slice(-8));
+                  
+                  const inboundLogs = logs.filter(l =>
+                    l.direction === 'INBOUND' &&
+                    recipientPhonesClean.includes(l.phone.replace(/\D/g, '').slice(-8)) &&
+                    new Date(l.createdAt) >= new Date(campaign.createdAt)
+                  );
                   const replyCount = inboundLogs.length;
                   const replyPercentage = sentCount > 0 ? Math.round((replyCount / sentCount) * 100) : 0;
-                  const recipientPhones = outboundLogs.map(l => l.phone);
-                  const showedUpBookings = bookings.filter(b =>
-                    recipientPhones.includes(b.customerPhone) &&
-                    (b.status === 'CHECKED_IN' || b.status === 'CHECKED_OUT' || b.status === 'CONFIRMED') &&
-                    new Date(b.createdAt) >= new Date(campaign.createdAt)
-                  );
+                  
+                  const showedUpBookings = bookings.filter(b => {
+                    const cleanBookingPhone = b.customerPhone ? b.customerPhone.replace(/\D/g, '').slice(-8) : '';
+                    return (
+                      recipientPhonesClean.includes(cleanBookingPhone) &&
+                      (b.status === 'CHECKED_IN' || b.status === 'CHECKED_OUT' || b.status === 'CONFIRMED') &&
+                      new Date(b.createdAt) >= new Date(campaign.createdAt)
+                    );
+                  });
                   const showedUpCount = showedUpBookings.length;
                   const showedUpPercentage = sentCount > 0 ? Math.round((showedUpCount / sentCount) * 100) : 0;
                   const isExpanded = selectedCampId === campaign.id;
                   const recipientsDetail = outboundLogs.map(ol => {
-                    const customer = customers.find(c => c.phone === ol.phone);
-                    const replyLog = inboundLogs.find(il => il.phone === ol.phone);
-                    const matchingBooking = bookings.find(b =>
-                      b.customerPhone === ol.phone &&
-                      (b.status === 'CHECKED_IN' || b.status === 'CHECKED_OUT' || b.status === 'CONFIRMED') &&
-                      new Date(b.createdAt) >= new Date(campaign.createdAt)
-                    );
+                    const cleanOlPhone = ol.phone.replace(/\D/g, '').slice(-8);
+                    const customer = customers.find(c => c.phone && c.phone.replace(/\D/g, '').slice(-8) === cleanOlPhone);
+                    const replyLog = inboundLogs.find(il => il.phone.replace(/\D/g, '').slice(-8) === cleanOlPhone);
+                    const matchingBooking = bookings.find(b => {
+                      const cleanBookingPhone = b.customerPhone ? b.customerPhone.replace(/\D/g, '').slice(-8) : '';
+                      return (
+                        cleanBookingPhone === cleanOlPhone &&
+                        (b.status === 'CHECKED_IN' || b.status === 'CHECKED_OUT' || b.status === 'CONFIRMED') &&
+                        new Date(b.createdAt) >= new Date(campaign.createdAt)
+                      );
+                    });
                     return {
                       phone: ol.phone,
                       name: customer ? customer.name : (matchingBooking ? matchingBooking.customerName : 'Valued Guest'),
