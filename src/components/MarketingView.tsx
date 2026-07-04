@@ -1859,7 +1859,12 @@ export default function MarketingView({
                                   {l.messageType}
                                 </span>
                               </td>
-                              <td className="p-3 text-gray-600 font-medium max-w-sm truncate" title={l.content}>{l.content}</td>
+                              <td className="p-3 text-gray-600 font-medium max-w-sm truncate relative group cursor-help" title={l.content}>
+                                <span>{l.content}</span>
+                                <div className="absolute left-0 bottom-full mb-1 hidden group-hover:block bg-gray-900 text-white text-xs rounded-xl p-3 shadow-xl max-w-xs z-50 whitespace-pre-wrap leading-relaxed animate-fade-in border border-gray-800">
+                                  {l.content}
+                                </div>
+                              </td>
                               <td className="p-3">
                                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold ${
                                   l.direction === 'INBOUND'

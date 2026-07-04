@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Calendar, PlusCircle, Search, Upload, CheckCircle2, Trash2, ArrowUpRight, HelpCircle, Settings, X, ChevronLeft, ChevronRight, LayoutList, MessageSquare } from 'lucide-react';
+import { Calendar, PlusCircle, Search, Upload, CheckCircle2, Trash2, ArrowUpRight, HelpCircle, Settings, X, ChevronLeft, ChevronRight, LayoutList, MessageSquare, Edit3 } from 'lucide-react';
 import { Booking, Guesthouse } from '../types';
 import ConfirmationModal from './ConfirmationModal';
 
@@ -78,6 +78,19 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
   const roomsList = parseRooms(guesthouse?.rooms).length > 0
     ? parseRooms(guesthouse?.rooms)
     : ['Suite 101 - Oak Haven', 'Room 202 - Pine view', 'Room 203 - Cozy Studio', 'Beachfront Cabin A', 'Horizon Suite'];
+
+  const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    customerName: '',
+    customerEmail: '',
+    customerPhone: '',
+    customerCountry: 'Botswana (local)',
+    roomName: roomsList[0] || 'Horizon Suite',
+    checkIn: '',
+    checkOut: '',
+    totalAmount: '',
+    status: 'CONFIRMED' as const
+  });
 
   const handleRoomAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -218,6 +231,48 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
     } catch (err) {
       console.error(err);
       alert('Error connecting to Express server');
+    }
+  };
+
+  const handleStartEditBooking = (b: Booking) => {
+    setEditingBookingId(b.id);
+    setEditFormData({
+      customerName: b.customerName,
+      customerEmail: b.customerEmail || '',
+      customerPhone: b.customerPhone,
+      customerCountry: b.customerCountry || 'Botswana (local)',
+      roomName: b.roomName,
+      checkIn: new Date(b.checkIn).toISOString().split('T')[0],
+      checkOut: new Date(b.checkOut).toISOString().split('T')[0],
+      totalAmount: String(b.totalAmount),
+      status: b.status as any
+    });
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBookingId) return;
+
+    try {
+      const response = await fetch(`/api/bookings/${editingBookingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...editFormData,
+          totalAmount: Number(editFormData.totalAmount)
+        })
+      });
+
+      if (response.ok) {
+        setEditingBookingId(null);
+        await onRefresh();
+      } else {
+        const err = (await response.json()) as any;
+        alert(err.error || 'Failed to update booking');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error updating booking');
     }
   };
 
@@ -745,6 +800,14 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
                           <MessageSquare className="h-4 w-4" />
                         </button>
                         <button
+                          onClick={() => handleStartEditBooking(b)}
+                          className="text-gray-400 hover:text-indigo-600 transition-colors p-1"
+                          id={`edit-booking-btn-${b.id}`}
+                          title="Edit Booking details"
+                        >
+                          <Edit3 className="h-4 w-4" />
+                        </button>
+                        <button
                           onClick={() => deleteBooking(b.id)}
                           className="text-gray-400 hover:text-red-600 transition-colors p-1"
                           id={`delete-booking-btn-${b.id}`}
@@ -896,6 +959,148 @@ export default function BookingsView({ bookings, guesthouseId, guesthouse, onRef
                   className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-semibold"
                 >
                   Schedule Booking
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Booking Modal */}
+      {editingBookingId && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" id="edit-booking-modal-overlay">
+          <div className="bg-white rounded-2xl border border-gray-100 max-w-md w-full p-6 shadow-2xl space-y-6" id="edit-booking-modal">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3" id="edit-modal-header">
+              <h3 className="font-bold text-gray-900 text-base" id="edit-modal-title">Edit Booking Details</h3>
+              <button onClick={() => setEditingBookingId(null)} className="text-gray-400 hover:text-gray-600" id="close-edit-modal">✕</button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="space-y-4" id="edit-booking-form">
+              <div className="space-y-1" id="edit-field-name">
+                <label className="text-xs font-bold text-gray-500">GUEST NAME *</label>
+                <input
+                  type="text"
+                  required
+                  value={editFormData.customerName}
+                  onChange={(e) => setEditFormData({ ...editFormData, customerName: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1" id="edit-field-phone">
+                  <label className="text-xs font-bold text-gray-500">WHATSAPP PHONE *</label>
+                  <input
+                    type="tel"
+                    required
+                    value={editFormData.customerPhone}
+                    onChange={(e) => setEditFormData({ ...editFormData, customerPhone: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
+                  />
+                </div>
+                <div className="space-y-1" id="edit-field-email">
+                  <label className="text-xs font-bold text-gray-500">EMAIL ADDRESS</label>
+                  <input
+                    type="email"
+                    value={editFormData.customerEmail}
+                    onChange={(e) => setEditFormData({ ...editFormData, customerEmail: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1" id="edit-field-country">
+                  <label className="text-xs font-bold text-gray-500">COUNTRY OF RESIDENCE</label>
+                  <select
+                    value={editFormData.customerCountry}
+                    onChange={(e) => setEditFormData({ ...editFormData, customerCountry: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none bg-white text-gray-700"
+                  >
+                    <option value="Botswana (local)">Botswana (local)</option>
+                    <option value="South Africa">South Africa</option>
+                    <option value="Germany">Germany</option>
+                    <option value="United Kingdom">United Kingdom</option>
+                    <option value="United States">United States</option>
+                    <option value="Other / International">Other / International</option>
+                  </select>
+                </div>
+                <div className="space-y-1" id="edit-field-room">
+                  <label className="text-xs font-bold text-gray-500">ROOM / CABIN ASSIGNED</label>
+                  <select
+                    value={editFormData.roomName}
+                    onChange={(e) => setEditFormData({ ...editFormData, roomName: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none bg-white text-gray-700"
+                  >
+                    {roomsList.map((r) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1" id="edit-field-checkin">
+                  <label className="text-xs font-bold text-gray-500">CHECK-IN DATE *</label>
+                  <input
+                    type="date"
+                    required
+                    value={editFormData.checkIn}
+                    onChange={(e) => setEditFormData({ ...editFormData, checkIn: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
+                  />
+                </div>
+                <div className="space-y-1" id="edit-field-checkout">
+                  <label className="text-xs font-bold text-gray-500">CHECK-OUT DATE *</label>
+                  <input
+                    type="date"
+                    required
+                    value={editFormData.checkOut}
+                    onChange={(e) => setEditFormData({ ...editFormData, checkOut: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1" id="edit-field-amount">
+                  <label className="text-xs font-bold text-gray-500">TOTAL Billed Amount (BWP) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={editFormData.totalAmount}
+                    onChange={(e) => setEditFormData({ ...editFormData, totalAmount: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
+                  />
+                </div>
+                <div className="space-y-1" id="edit-field-status">
+                  <label className="text-xs font-bold text-gray-500">BOOKING STATUS *</label>
+                  <select
+                    value={editFormData.status}
+                    onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value as any })}
+                    className="w-full px-3.5 py-2 border border-gray-100 rounded-xl text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none bg-white text-gray-700"
+                  >
+                    <option value="CONFIRMED">CONFIRMED</option>
+                    <option value="CHECKED_IN">CHECKED_IN</option>
+                    <option value="CHECKED_OUT">CHECKED_OUT</option>
+                    <option value="CANCELLED">CANCELLED</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100" id="edit-modal-footer">
+                <button
+                  type="button"
+                  onClick={() => setEditingBookingId(null)}
+                  className="px-4 py-2 border border-gray-100 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-semibold"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>
