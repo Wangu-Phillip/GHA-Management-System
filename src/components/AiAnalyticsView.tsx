@@ -40,7 +40,7 @@ export default function AiAnalyticsView({ guesthouseId, onNavigateToCampaign }: 
           <Sparkles className="h-4 w-4 text-amber-500 absolute -top-1 -right-1 animate-bounce" id="ai-sparkles" />
         </div>
         <div className="text-center space-y-1" id="ai-loading-desc">
-          <p className="text-sm font-bold text-gray-700">Gemini Hospitality Intelligence is analyzing booking patterns...</p>
+          <p className="text-sm font-bold text-gray-700">Oidaq Hospitality Intelligence is analyzing booking patterns...</p>
           <p className="text-xs text-gray-400">Synthesizing season factors, historical checkout rates and marketing opt-ins.</p>
         </div>
       </div>
@@ -60,7 +60,7 @@ export default function AiAnalyticsView({ guesthouseId, onNavigateToCampaign }: 
           <div className="flex items-center gap-2" id="ai-badge-block">
             <span className="text-[10px] bg-indigo-500/20 text-indigo-300 font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1.5 uppercase tracking-wider">
               <Sparkles className="h-3 w-3 text-amber-300" />
-              Gemini Pro Analytics
+              Oidaq Analytics
             </span>
           </div>
           <h3 className="text-lg font-bold tracking-tight">AI Booking & Revenue Forecast</h3>
@@ -146,7 +146,7 @@ export default function AiAnalyticsView({ guesthouseId, onNavigateToCampaign }: 
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm lg:col-span-2 space-y-4" id="ai-narrative-card">
           <div className="flex items-center gap-2 text-indigo-600" id="narrative-header">
             <Sparkles className="h-5 w-5" />
-            <h4 className="font-semibold text-gray-900 text-sm">Gemini Executive Strategic Digest</h4>
+            <h4 className="font-semibold text-gray-900 text-sm">Oidaq Executive Strategic Digest</h4>
           </div>
 
           <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap font-medium bg-gray-50 p-4 rounded-2xl border border-gray-100" id="digest-narrative">

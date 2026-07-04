@@ -19,7 +19,7 @@ import { getOrGenerateAdvisorAdvice } from './services/facebook_ai';
 
 export type Bindings = {
   DB: D1Database;
-  GEMINI_API_KEY?: string;
+  AI?: any;
   WHATSAPP_VERIFY_TOKEN?: string;
   FIREBASE_API_KEY?: string;
   ENCRYPTION_KEY?: string;
@@ -1036,7 +1036,7 @@ app.get('/api/analytics/ai-forecast', async (c) => {
     const gh = await c.var.prisma.guesthouse.findUnique({ where: { id: guesthouseId } });
     if (!gh) return c.json({ error: 'Guesthouse not found' }, 404);
     const bookings = await c.var.prisma.booking.findMany();
-    const forecast = await generateFuturePredictions(bookings as any, gh.name, c.env?.GEMINI_API_KEY);
+    const forecast = await generateFuturePredictions(bookings as any, gh.name, c.env?.AI);
     return c.json(forecast);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -1119,8 +1119,7 @@ app.get('/api/facebook/account', async (c) => {
   const guesthouseId = c.req.query('guesthouseId');
   if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
   try {
-    const account = await (c.var.prisma as any).facebookAdAccount.findUnique({
-      where: {} });
+    const account = await (c.var.prisma as any).facebookAdAccount.findFirst();
     return c.json(account || null);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -1158,10 +1157,18 @@ app.put('/api/facebook/account', async (c) => {
       }
     }
 
-    const account = await (c.var.prisma as any).facebookAdAccount.upsert({
-      where: {},
-      create: { adAccountId: normalizedAdAccountId, accessToken, pageId, accountName, currency, timezone },
-      update: { adAccountId: normalizedAdAccountId, accessToken, pageId, accountName, currency, timezone, updatedAt: new Date() } });
+    const existing = await (c.var.prisma as any).facebookAdAccount.findFirst();
+    let account;
+    if (existing) {
+      account = await (c.var.prisma as any).facebookAdAccount.update({
+        where: { id: existing.id },
+        data: { adAccountId: normalizedAdAccountId, accessToken, pageId, accountName, currency, timezone, updatedAt: new Date() }
+      });
+    } else {
+      account = await (c.var.prisma as any).facebookAdAccount.create({
+        data: { adAccountId: normalizedAdAccountId, accessToken, pageId, accountName, currency, timezone }
+      });
+    }
 
     // Auto-clear dummy data now that real Facebook keys are applied
     console.log(`[Facebook Settings] Real keys applied for ${guesthouseId}. Clearing dummy/seeded records.`);
@@ -1179,8 +1186,7 @@ app.post('/api/facebook/sync', async (c) => {
     const { guesthouseId, days } = await c.req.json();
     if (!guesthouseId) return c.json({ error: 'guesthouseId is required' }, 400);
 
-    const account = await (c.var.prisma as any).facebookAdAccount.findUnique({
-      where: {} });
+    const account = await (c.var.prisma as any).facebookAdAccount.findFirst();
 
     // Cap the sync window to 730 days (2 years) to stay safely within Meta's 37-month query limit
     const syncDays = 730;
@@ -1208,7 +1214,6 @@ app.post('/api/facebook/sync', async (c) => {
         where: { id: camp.id },
         create: {
           id: camp.id,
-          guesthouseId,
           adAccountId: account?.adAccountId || 'act_demo',
           name: camp.name,
           status: camp.status,
@@ -1295,8 +1300,7 @@ app.post('/api/facebook/campaigns', async (c) => {
       return c.json({ error: 'guesthouseId, name, and objective are required' }, 400);
     }
 
-    const account = await (c.var.prisma as any).facebookAdAccount.findUnique({
-      where: {} });
+    const account = await (c.var.prisma as any).facebookAdAccount.findFirst();
 
     const isMockMode = !account || !account.accessToken || account.accessToken === 'DEMO_MODE';
     const campaignId = isMockMode
@@ -1312,7 +1316,6 @@ app.post('/api/facebook/campaigns', async (c) => {
     const created = await (c.var.prisma as any).facebookCampaign.create({
       data: {
         id: campaignId,
-        guesthouseId,
         adAccountId: account?.adAccountId || 'act_demo',
         name,
         status: 'PAUSED',
@@ -1337,8 +1340,7 @@ app.patch('/api/facebook/campaigns/:id/budget', async (c) => {
       return c.json({ error: 'guesthouseId and dailyBudget are required' }, 400);
     }
 
-    const account = await (c.var.prisma as any).facebookAdAccount.findUnique({
-      where: {} });
+    const account = await (c.var.prisma as any).facebookAdAccount.findFirst();
 
     const isMockMode = !account || !account.accessToken || account.accessToken === 'DEMO_MODE';
     if (!isMockMode) {
@@ -1366,8 +1368,10 @@ app.get('/api/facebook/insights', async (c) => {
 
   try {
     const { since } = getDateRange(Number(days));
+    const account = await (c.var.prisma as any).facebookAdAccount.findFirst();
+    const adAccountId = account?.adAccountId || 'act_demo';
     const where: any = {
-      guesthouseId,
+      adAccountId,
       objectLevel: level.toUpperCase(),
       date: { gte: since } };
     if (campaignId) where.objectId = campaignId;
@@ -1396,7 +1400,7 @@ app.get('/api/facebook/ai-advisor', async (c) => {
       guesthouseId,
       windowDays,
       gh.name,
-      c.env?.GEMINI_API_KEY,
+      c.env?.AI,
       false
     );
     return c.json(advice);
@@ -1419,7 +1423,7 @@ app.post('/api/facebook/ai-advisor/regenerate', async (c) => {
       guesthouseId,
       Number(windowDays),
       gh.name,
-      c.env?.GEMINI_API_KEY,
+      c.env?.AI,
       true // forceRegenerate
     );
     return c.json(advice);

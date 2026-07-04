@@ -731,7 +731,7 @@ export default function FacebookAdsView({ guesthouseId }: Props) {
                     <div>
                       <p className="text-sm font-bold text-gray-800">Analysing your ad performance…</p>
                       <p className="text-xs text-gray-400 mt-1">
-                        Fetching {windowDays}-day insights from D1 and running Gemini inference
+                        Fetching {windowDays}-day insights from D1 and running Oidaq inference
                       </p>
                     </div>
                   </div>

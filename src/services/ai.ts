@@ -20,12 +20,10 @@ export interface AiInsights {
 export async function generateFuturePredictions(
   bookings: BookingData[],
   guesthouseName: string,
-  apiKey?: string
+  aiBinding?: any
 ): Promise<AiInsights> {
-  const key = apiKey;
-
-  if (!key || key === 'MY_GEMINI_API_KEY') {
-    console.log('Gemini API Key not set. Serving synthetic AI-driven forecast.');
+  if (!aiBinding) {
+    console.log('Oidaq binding not available. Serving synthetic AI-driven forecast.');
     return generateSyntheticForecast(bookings, guesthouseName);
   }
 
@@ -37,85 +35,56 @@ export async function generateFuturePredictions(
     status: b.status,
   }));
 
-  const prompt = `
-You are an expert hospitality data analyst. Analyze the following booking history of "${guesthouseName}" and generate a day-by-day 30-day forecast starting from today (June 29, 2026).
-Historical Bookings:
+  const systemPrompt = `You are an expert hospitality data analyst. You must analyze the booking history of "${guesthouseName}" and generate a day-by-day 30-day forecast starting from today (June 29, 2026).
+Respond ONLY with a valid JSON object matching this schema:
+{
+  "predictions": [
+    {
+      "date": "YYYY-MM-DD",
+      "predictedOccupancyRate": number,
+      "predictedRevenue": number,
+      "confidenceScore": number,
+      "seasonalFactors": "description string"
+    }
+  ],
+  "summaryText": "Executive narrative string",
+  "recommendedPromotions": ["string", "string", "string"]
+}
+IMPORTANT: Output raw JSON only. All keys and string values must use double quotes. Do NOT use unescaped double quotes inside string values; use single quotes instead (e.g. 'surge' instead of "surge"). Do not include trailing commas.`;
+
+  const userPrompt = `Historical Bookings:
 ${JSON.stringify(formattedHistory, null, 2)}
 
-Provide a structured analysis containing:
-1. Day-by-day occupancy rate (%) and revenue projection for the next 30 days.
-2. A high-level executive summary analyzing peak days, revenue opportunities, and pricing recommendations.
-3. 3-4 specific WhatsApp promotional ideas based on predicted low occupancy periods.
-
-You must reply with ONLY the JSON object conforming to the requested schema.
-`;
+Provide a day-by-day 30-day forecast starting from June 29, 2026. Do not include markdown code block formatting or wrap with \`\`\`json. Return only raw JSON.`;
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
-    const payload = {
-      contents: [
-        {
-          parts: [
-            {
-              text: prompt
-            }
-          ]
-        }
-      ],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: {
-            predictions: {
-              type: "ARRAY",
-              items: {
-                type: "OBJECT",
-                properties: {
-                  date: { type: "STRING", description: "YYYY-MM-DD" },
-                  predictedOccupancyRate: { type: "NUMBER", description: "Percentage from 0 to 100" },
-                  predictedRevenue: { type: "NUMBER", description: "Projected daily revenue in currency" },
-                  confidenceScore: { type: "NUMBER", description: "Confidence level 0.0 to 1.0" },
-                  seasonalFactors: { type: "STRING", description: "Reasoning" }
-                },
-                required: ["date", "predictedOccupancyRate", "predictedRevenue", "confidenceScore", "seasonalFactors"]
-              }
-            },
-            summaryText: { type: "STRING", description: "Executive narrative of upcoming trends and pricing suggestions" },
-            recommendedPromotions: {
-              type: "ARRAY",
-              items: { type: "STRING" },
-              description: "Actionable targeted promotional ideas for low-demand periods"
-            }
-          },
-          required: ["predictions", "summaryText", "recommendedPromotions"]
-        }
-      }
-    };
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'aistudio-build'
-      },
-      body: JSON.stringify(payload)
+    const response = await aiBinding.run('@cf/meta/llama-3.2-3b-instruct', {
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ]
     });
 
-    if (!res.ok) {
-      throw new Error(`Gemini API responded with status ${res.status}: ${await res.text()}`);
-    }
-
-    const data: any = await res.json();
-    const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
+    const textResponse = response.response;
     if (!textResponse) {
-      throw new Error('Empty response from Gemini API');
+      throw new Error('Empty response from Oidaq');
     }
 
-    return JSON.parse(textResponse) as AiInsights;
+    let cleanText = textResponse.trim();
+    if (cleanText.startsWith('```')) {
+      cleanText = cleanText.replace(/^```json\s*/i, '').replace(/```\s*$/, '');
+    }
+
+    const firstBrace = cleanText.indexOf('{');
+    const lastBrace = cleanText.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1) {
+      cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+    }
+    cleanText = cleanText.replace(/,\s*([\]}])/g, '$1');
+
+    return JSON.parse(cleanText) as AiInsights;
   } catch (error) {
-    console.error('Error generating AI predictions via Gemini edge API:', error);
+    console.error('Error generating AI predictions via Oidaq edge:', error);
     return generateSyntheticForecast(bookings, guesthouseName);
   }
 }

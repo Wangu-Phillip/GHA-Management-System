@@ -61,8 +61,7 @@ export async function buildAdvisorContext(
   const sinceStr = since.toISOString().split('T')[0];
 
   // Find the active connected Facebook Ad Account
-  const account = await (prisma as any).facebookAdAccount.findUnique({
-    where: {} });
+  const account = await (prisma as any).facebookAdAccount.findFirst();
   const adAccountId = account?.adAccountId || 'act_demo';
 
   // Fetch insights within window (campaign-level) matching the active adAccountId
@@ -161,106 +160,94 @@ export async function buildAdvisorContext(
 export async function generateAdvisorAdvice(
   context: Record<string, unknown>,
   guesthouseName: string,
-  geminiApiKey: string
+  aiBinding: any
 ): Promise<AdvisorAdvice> {
-  const prompt = `
-You are an expert Facebook Ads performance analyst for the hospitality industry.
-Analyze the following ${context.windowDays}-day Facebook Ads performance data for "${guesthouseName}" and provide actionable advice.
+  const systemPrompt = `You are an expert Facebook Ads performance analyst for the hospitality industry.
+Analyze the following performance data for "${guesthouseName}" and provide actionable advice.
+Respond ONLY with a valid JSON object matching this schema:
+{
+  "performanceSummary": "concise executive performance summary string",
+  "budgetSuggestions": [
+    {
+      "campaignId": "string",
+      "campaignName": "string",
+      "currentDailyBudget": number,
+      "suggestedDailyBudget": number,
+      "rationale": "data-driven rationale string"
+    }
+  ],
+  "topPerformers": [
+    {
+      "campaignId": "string",
+      "campaignName": "string",
+      "totalSpend": number,
+      "totalImpressions": number,
+      "totalClicks": number,
+      "totalConversions": number,
+      "avgCtr": number,
+      "avgCpc": number,
+      "avgRoas": number
+    }
+  ],
+  "bottomPerformers": [
+    {
+      "campaignId": "string",
+      "campaignName": "string",
+      "totalSpend": number,
+      "totalImpressions": number,
+      "totalClicks": number,
+      "totalConversions": number,
+      "avgCtr": number,
+      "avgCpc": number,
+      "avgRoas": number
+    }
+  ],
+  "audienceInsights": "target audience insights string",
+  "outlook30Days": "30-day forward outlook string"
+}
+IMPORTANT: Output raw JSON only. All keys and string values must use double quotes. Do NOT use unescaped double quotes inside string values; use single quotes instead (e.g. 'surge' instead of "surge"). Do not include trailing commas.`;
 
-Performance Data:
+  const userPrompt = `Performance Data:
 ${JSON.stringify(context, null, 2)}
 
-Provide a structured analysis with:
-1. A concise executive performance summary (2-3 sentences).
-2. Budget reallocation suggestions: For each campaign, suggest an optimal daily budget with a specific data-driven rationale.
-3. Identify the top 2-3 performing campaigns with key metrics.
-4. Identify the bottom 1-2 underperforming campaigns with specific improvement actions.
-5. Target audience insights based on CTR and conversion patterns.
-6. A 30-day forward outlook with projected spend, clicks, and conversions.
+Provide the structured analysis as raw JSON. Do not wrap in markdown code block formatting.`;
 
-Be specific with numbers and percentages. Focus on actionable next steps.
-Reply with ONLY the JSON object conforming to the schema.
-`;
+  try {
+    const response = await aiBinding.run('@cf/meta/llama-3.2-3b-instruct', {
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ]
+    });
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
-  const payload = {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: {
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: 'OBJECT',
-        properties: {
-          performanceSummary: { type: 'STRING' },
-          budgetSuggestions: {
-            type: 'ARRAY',
-            items: {
-              type: 'OBJECT',
-              properties: {
-                campaignId: { type: 'STRING' },
-                campaignName: { type: 'STRING' },
-                currentDailyBudget: { type: 'NUMBER' },
-                suggestedDailyBudget: { type: 'NUMBER' },
-                rationale: { type: 'STRING' } },
-              required: ['campaignId', 'campaignName', 'currentDailyBudget', 'suggestedDailyBudget', 'rationale'] } },
-          topPerformers: {
-            type: 'ARRAY',
-            items: {
-              type: 'OBJECT',
-              properties: {
-                campaignId: { type: 'STRING' },
-                campaignName: { type: 'STRING' },
-                totalSpend: { type: 'NUMBER' },
-                totalImpressions: { type: 'NUMBER' },
-                totalClicks: { type: 'NUMBER' },
-                totalConversions: { type: 'NUMBER' },
-                avgCtr: { type: 'NUMBER' },
-                avgCpc: { type: 'NUMBER' },
-                avgRoas: { type: 'NUMBER' } },
-              required: ['campaignId', 'campaignName', 'totalSpend', 'totalImpressions', 'totalClicks', 'totalConversions', 'avgCtr', 'avgCpc', 'avgRoas'] } },
-          bottomPerformers: {
-            type: 'ARRAY',
-            items: {
-              type: 'OBJECT',
-              properties: {
-                campaignId: { type: 'STRING' },
-                campaignName: { type: 'STRING' },
-                totalSpend: { type: 'NUMBER' },
-                totalImpressions: { type: 'NUMBER' },
-                totalClicks: { type: 'NUMBER' },
-                totalConversions: { type: 'NUMBER' },
-                avgCtr: { type: 'NUMBER' },
-                avgCpc: { type: 'NUMBER' },
-                avgRoas: { type: 'NUMBER' } },
-              required: ['campaignId', 'campaignName', 'totalSpend', 'totalImpressions', 'totalClicks', 'totalConversions', 'avgCtr', 'avgCpc', 'avgRoas'] } },
-          audienceInsights: { type: 'STRING' },
-          outlook30Days: { type: 'STRING' } },
-        required: [
-          'performanceSummary',
-          'budgetSuggestions',
-          'topPerformers',
-          'bottomPerformers',
-          'audienceInsights',
-          'outlook30Days' ] } } };
+    const textResponse = response.response;
+    if (!textResponse) {
+      throw new Error('Empty response from Oidaq');
+    }
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload) });
+    let cleanText = textResponse.trim();
+    if (cleanText.startsWith('```')) {
+      cleanText = cleanText.replace(/^```json\s*/i, '').replace(/```\s*$/, '');
+    }
 
-  if (!res.ok) {
-    throw new Error(`Gemini API error ${res.status}: ${await res.text()}`);
+    const firstBrace = cleanText.indexOf('{');
+    const lastBrace = cleanText.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1) {
+      cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+    }
+    cleanText = cleanText.replace(/,\s*([\]}])/g, '$1');
+
+    const parsed = JSON.parse(cleanText);
+    return {
+      ...parsed,
+      generatedAt: new Date().toISOString(),
+      windowDays: context.windowDays as number,
+      isFromCache: false
+    };
+  } catch (error) {
+    console.error('Error generating AI advice via Oidaq:', error);
+    throw error;
   }
-
-  const data: any = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Empty response from Gemini');
-
-  const parsed = JSON.parse(text);
-  return {
-    ...parsed,
-    generatedAt: new Date().toISOString(),
-    windowDays: context.windowDays as number,
-    isFromCache: false };
 }
 
 // ─── Synthetic Fallback ───────────────────────────────────────────────────────
@@ -314,7 +301,7 @@ export async function getOrGenerateAdvisorAdvice(
   guesthouseId: string,
   windowDays: number,
   guesthouseName: string,
-  geminiApiKey?: string,
+  aiBinding?: any,
   forceRegenerate = false
 ): Promise<AdvisorAdvice> {
   // Check cache
@@ -339,16 +326,16 @@ export async function getOrGenerateAdvisorAdvice(
 
   let advice: AdvisorAdvice;
 
-  // Inference: use Gemini if key is available, otherwise synthetic fallback
-  if (geminiApiKey && geminiApiKey !== 'MY_GEMINI_API_KEY') {
+  // Inference: use Oidaq if binding is available, otherwise synthetic fallback
+  if (aiBinding) {
     try {
-      advice = await generateAdvisorAdvice(context, guesthouseName, geminiApiKey);
+      advice = await generateAdvisorAdvice(context, guesthouseName, aiBinding);
     } catch (err) {
-      console.error('[AI Advisor] Gemini call failed, falling back to synthetic:', err);
+      console.error('[AI Advisor] Oidaq call failed, falling back to synthetic:', err);
       advice = generateSyntheticAdvice(context, guesthouseName, windowDays);
     }
   } else {
-    console.log('[AI Advisor] No Gemini key, serving synthetic advice.');
+    console.log('[AI Advisor] No Oidaq binding, serving synthetic advice.');
     advice = generateSyntheticAdvice(context, guesthouseName, windowDays);
   }
 
