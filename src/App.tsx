@@ -20,7 +20,8 @@ import {
   Megaphone,
   AlertCircle,
   X,
-  Info
+  Info,
+  Menu
 } from 'lucide-react';
 
 import { User, Guesthouse, Booking, Customer, MessageLog, Campaign } from './types';
@@ -39,6 +40,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [guesthouse, setGuesthouse] = useState<Guesthouse | null>(null);
   const [activeTab, setActiveTab] = useState<string>('overview');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   // Real-time states synced from Express API
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -597,11 +599,217 @@ export default function App() {
     );
   }
 
+  const renderNavigationLinks = (closeMobileMenu?: () => void) => {
+    const handleNavClick = (tab: string) => {
+      setActiveTab(tab);
+      if (closeMobileMenu) closeMobileMenu();
+    };
+
+    return (
+      <div className="space-y-1">
+        {user.role !== 'SUPER_ADMIN' && (
+          <>
+            <button
+              onClick={() => handleNavClick('overview')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === 'overview' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+              }`}
+              id="nav-overview"
+            >
+              <LayoutDashboard className="h-4 w-4" />
+              Overview Dashboard
+            </button>
+
+            <button
+              onClick={() => handleNavClick('bookings')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === 'bookings' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+              }`}
+              id="nav-bookings"
+            >
+              <Calendar className="h-4 w-4" />
+              Bookings Log
+            </button>
+
+            {guesthouse?.featureFlags?.facebookAds === true && guesthouse?.subscriptionStatus === 'ACTIVE' && (
+              <button
+                onClick={() => handleNavClick('facebook-ads')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
+                  activeTab === 'facebook-ads' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+                }`}
+                id="nav-facebook-ads"
+              >
+                <Megaphone className="h-4 w-4 text-blue-400" />
+                Facebook Ads
+              </button>
+            )}
+
+            {guesthouse?.featureFlags?.whatsappMarketing === true && guesthouse?.subscriptionStatus === 'ACTIVE' && (
+              <button
+                onClick={() => handleNavClick('marketing')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
+                  activeTab === 'marketing' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+                }`}
+                id="nav-marketing"
+              >
+                <Smartphone className="h-4 w-4" />
+                WhatsApp Marketing
+              </button>
+            )}
+
+            <button
+              onClick={() => handleNavClick('customers')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === 'customers' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+              }`}
+              id="nav-customers"
+            >
+              <Users className="h-4 w-4" />
+              Clients Registry
+            </button>
+
+            <button
+              onClick={() => handleNavClick('reports')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === 'reports' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+              }`}
+              id="nav-reports"
+            >
+              <BarChart className="h-4 w-4" />
+              Stat Reports
+            </button>
+
+            {guesthouse?.featureFlags?.aiForecasts === true && guesthouse?.subscriptionStatus === 'ACTIVE' && (
+              <button
+                onClick={() => handleNavClick('ai-analytics')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
+                  activeTab === 'ai-analytics' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+                }`}
+                id="nav-ai-analytics"
+              >
+                <Brain className="h-4 w-4 text-amber-400" />
+                AI Booking Forecast
+              </button>
+            )}
+
+            {user.role === 'TENANT_ADMIN' && (
+              <button
+                onClick={() => handleNavClick('settings')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
+                  activeTab === 'settings' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+                }`}
+                id="nav-settings"
+              >
+                <Settings className="h-4 w-4" />
+                Guesthouse Settings
+              </button>
+            )}
+          </>
+        )}
+
+        {user.role === 'SUPER_ADMIN' && (
+          <>
+            <button
+              onClick={() => handleNavClick('super-admin')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === 'super-admin' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+              }`}
+              id="nav-super-admin"
+            >
+              <ShieldCheck className="h-4 w-4 text-emerald-400" />
+              Global SaaS Overseer
+            </button>
+
+            <button
+              onClick={() => handleNavClick('super-settings')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === 'super-settings' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+              }`}
+              id="nav-super-settings"
+            >
+              <Settings className="h-4 w-4 text-indigo-400" />
+              SaaS Overseer Settings
+            </button>
+          </>
+        )}
+      </div>
+    );
+  };
+
   return (
     <>
+      {/* Mobile Drawer Overlay */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 bg-black z-50 md:hidden"
+            />
+            {/* Drawer */}
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed inset-y-0 left-0 w-64 bg-gray-950 text-white z-50 flex flex-col justify-between overflow-hidden shadow-2xl md:hidden"
+            >
+              <div className="p-6 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-indigo-600 rounded-xl text-white">
+                      <Bed className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <span className="font-black text-xl tracking-wider block">Oidaq</span>
+                      <span className="text-[9px] text-gray-400 font-mono tracking-tight uppercase">V1.0.0</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-900 rounded-lg transition-colors"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <div className="border-t border-gray-800" />
+                <nav className="space-y-1">
+                  {renderNavigationLinks(() => setIsMobileMenuOpen(false))}
+                </nav>
+              </div>
+              <div className="p-6 border-t border-gray-900 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 bg-gray-800 text-white flex items-center justify-center font-bold text-xs rounded-xl border border-gray-700">
+                    {user.name.charAt(0)}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-xs text-gray-200 block truncate">{user.name}</span>
+                    <span className="text-[10px] text-gray-500 block truncate">{user.role}</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    handleLogout();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-red-950/20 hover:bg-red-950/40 border border-red-900/20 hover:border-red-900/40 text-red-400 rounded-xl text-xs font-semibold transition-all"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign Out
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       <div className="h-screen bg-gray-50 flex font-sans text-gray-800 antialiased overflow-hidden" id="dashboard-container">
-      {/* 1. Permanent Left Sidebar */}
-      <aside className="w-64 bg-gray-950 text-white flex flex-col justify-between shrink-0 overflow-hidden" id="main-sidebar">
+      {/* 1. Permanent Left Sidebar (desktop only) */}
+      <aside className="hidden md:flex w-64 bg-gray-950 text-white flex flex-col justify-between shrink-0 overflow-hidden" id="main-sidebar">
         <div className="p-6 space-y-6" id="sidebar-top">
           {/* Logo Brand */}
           <div className="flex items-center gap-3" id="sidebar-brand">
@@ -618,132 +826,7 @@ export default function App() {
 
           {/* Navigation Links */}
           <nav className="space-y-1" id="sidebar-nav">
-            {user.role !== 'SUPER_ADMIN' && (
-              <>
-                <button
-                  onClick={() => setActiveTab('overview')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
-                    activeTab === 'overview' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
-                  }`}
-                  id="nav-overview"
-                >
-                  <LayoutDashboard className="h-4 w-4" />
-                  Overview Dashboard
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('bookings')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
-                    activeTab === 'bookings' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
-                  }`}
-                  id="nav-bookings"
-                >
-                  <Calendar className="h-4 w-4" />
-                  Bookings Log
-                </button>
-
-                {guesthouse?.featureFlags?.facebookAds === true && guesthouse?.subscriptionStatus === 'ACTIVE' && (
-                  <button
-                    onClick={() => setActiveTab('facebook-ads')}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
-                      activeTab === 'facebook-ads' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
-                    }`}
-                    id="nav-facebook-ads"
-                  >
-                    <Megaphone className="h-4 w-4 text-blue-400" />
-                    Facebook Ads
-                  </button>
-                )}
-
-                {guesthouse?.featureFlags?.whatsappMarketing === true && guesthouse?.subscriptionStatus === 'ACTIVE' && (
-                  <button
-                    onClick={() => setActiveTab('marketing')}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
-                      activeTab === 'marketing' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
-                    }`}
-                    id="nav-marketing"
-                  >
-                    <Smartphone className="h-4 w-4" />
-                    WhatsApp Marketing
-                  </button>
-                )}
-
-                <button
-                  onClick={() => setActiveTab('customers')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
-                    activeTab === 'customers' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
-                  }`}
-                  id="nav-customers"
-                >
-                  <Users className="h-4 w-4" />
-                  Clients Registry
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('reports')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
-                    activeTab === 'reports' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
-                  }`}
-                  id="nav-reports"
-                >
-                  <BarChart className="h-4 w-4" />
-                  Stat Reports
-                </button>
-
-                {guesthouse?.featureFlags?.aiForecasts === true && guesthouse?.subscriptionStatus === 'ACTIVE' && (
-                  <button
-                    onClick={() => setActiveTab('ai-analytics')}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
-                      activeTab === 'ai-analytics' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
-                    }`}
-                    id="nav-ai-analytics"
-                  >
-                    <Brain className="h-4 w-4 text-amber-400" />
-                    AI Booking Forecast
-                  </button>
-                )}
-
-                {user.role === 'TENANT_ADMIN' && (
-                  <button
-                    onClick={() => setActiveTab('settings')}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
-                      activeTab === 'settings' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
-                    }`}
-                    id="nav-settings"
-                  >
-                    <Settings className="h-4 w-4" />
-                    Guesthouse Settings
-                  </button>
-                )}
-              </>
-            )}
-
-            {/* SUPER ADMIN ROUTE OVERSEER */}
-            {user.role === 'SUPER_ADMIN' && (
-              <>
-                <button
-                  onClick={() => setActiveTab('super-admin')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
-                    activeTab === 'super-admin' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
-                  }`}
-                  id="nav-super-admin"
-                >
-                  <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                  Global SaaS Overseer
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('super-settings')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
-                    activeTab === 'super-settings' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-900 hover:text-white'
-                  }`}
-                  id="nav-super-settings"
-                >
-                  <Settings className="h-4 w-4 text-indigo-400" />
-                  SaaS Overseer Settings
-                </button>
-              </>
-            )}
+            {renderNavigationLinks()}
           </nav>
         </div>
 
@@ -772,8 +855,8 @@ export default function App() {
 
       {/* 2. Main Content Canvas */}
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto" id="main-canvas">
-        {/* Top Metric Header Bar */}
-        <header className="h-16 bg-white border-b border-gray-100 flex items-center justify-between px-8 shrink-0 shadow-sm" id="main-header">
+        {/* Desktop Metric Header Bar */}
+        <header className="hidden md:flex h-16 bg-white border-b border-gray-100 items-center justify-between px-8 shrink-0 shadow-sm" id="main-header">
           <div className="flex items-center gap-3" id="header-left">
             <Building className="h-5 w-5 text-gray-400" />
             <h1 className="text-sm font-bold text-gray-900" id="guesthouse-heading">
@@ -813,8 +896,36 @@ export default function App() {
           </div>
         </header>
 
+        {/* Mobile Header Bar */}
+        <header className="md:hidden h-16 bg-white border-b border-gray-100 flex items-center justify-between px-4 shrink-0 shadow-sm" id="mobile-header">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="p-2 hover:bg-gray-50 rounded-xl text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <h1 className="text-xs font-bold text-gray-900 truncate max-w-[150px]">
+              {guesthouse ? guesthouse.name : 'Platform Overseer'}
+            </h1>
+          </div>
+          <div className="flex items-center gap-3">
+            {/* Database indicator */}
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-50 border border-gray-100 rounded-lg">
+              <Database className={`h-3 w-3 ${dbConnected ? 'text-green-500' : 'text-amber-500 animate-pulse'}`} />
+              <span className="text-[8px] font-bold text-gray-500 font-mono">
+                {dbMode === 'D1_SQLITE_CLOUDFLARE' ? 'D1' : 'Demo'}
+              </span>
+            </div>
+            {/* User Avatar */}
+            <div className="h-8 w-8 bg-gray-900 text-white flex items-center justify-center font-bold text-xs rounded-xl border border-gray-800">
+              {user.name.charAt(0)}
+            </div>
+          </div>
+        </header>
+
         {/* Dynamic Canvas Area */}
-        <div className="p-8 flex-1" id="page-body">
+        <div className="p-4 md:p-8 flex-1" id="page-body">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}

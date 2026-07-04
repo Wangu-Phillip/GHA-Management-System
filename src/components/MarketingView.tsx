@@ -639,8 +639,39 @@ export default function MarketingView({
     }
   };
 
+  const isWhatsAppDemoMode = 
+    !guesthouse.whatsappPhoneId || 
+    !guesthouse.whatsappToken || 
+    guesthouse.whatsappToken.startsWith('dummy') || 
+    guesthouse.whatsappToken.startsWith('mock') || 
+    guesthouse.whatsappToken === 'YOUR_ACCESS_TOKEN';
+
   return (
     <div className="space-y-6" id="marketing-view">
+      {/* Credentials Banner */}
+      <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+        isWhatsAppDemoMode 
+          ? 'bg-amber-50 border-amber-100 text-amber-800' 
+          : 'bg-emerald-50 border-emerald-100 text-emerald-800'
+      }`} id="whatsapp-credentials-mode-banner">
+        <div className="flex items-center gap-3" id="banner-left-info">
+          <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${isWhatsAppDemoMode ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500 animate-pulse'}`} />
+          <div className="space-y-0.5" id="banner-texts">
+            <p className="text-xs font-bold uppercase tracking-wider">
+              WhatsApp Mode: {isWhatsAppDemoMode ? 'Demo Mode (Seeded Mock Data)' : 'Live Mode (Meta Cloud API)'}
+            </p>
+            <p className="text-[10px] opacity-75 leading-relaxed">
+              {isWhatsAppDemoMode 
+                ? 'Running in local sandbox mode with simulated message dispatch. Add your Meta credentials in Meta API Integration tab to connect your live number.' 
+                : `Connected to Meta Phone ID ${guesthouse.whatsappPhoneId}. Incoming customer replies will automatically sync here.`}
+            </p>
+          </div>
+        </div>
+        <div className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white/60 border border-current/10 shrink-0 self-start sm:self-auto text-center">
+          {isWhatsAppDemoMode ? 'Demo Mode' : 'Connected'}
+        </div>
+      </div>
+
       {/* Sub menu tabs */}
       <div className="flex border-b border-gray-100 gap-1 overflow-x-auto" id="marketing-sub-tabs">
         <button
