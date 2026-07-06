@@ -21,7 +21,12 @@ import {
   AlertCircle,
   X,
   Info,
-  Menu
+  Menu,
+  TrendingUp,
+  Zap,
+  Check,
+  ArrowRight,
+  DollarSign
 } from 'lucide-react';
 
 import { User, Guesthouse, Booking, Customer, MessageLog, Campaign } from './types';
@@ -59,8 +64,12 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
 
+  // Login page toggling state
+  const [showLogin, setShowLogin] = useState(false);
   // Forgot Password flow states
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  // ROI Calculator state for landing page
+  const [monthlyRevenue, setMonthlyRevenue] = useState(30000);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotMsg, setForgotMsg] = useState('');
   const [forgotError, setForgotError] = useState('');
@@ -389,12 +398,354 @@ export default function App() {
     </AnimatePresence>
   );
 
+  const renderLandingPage = () => {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col font-sans antialiased text-gray-900 scroll-smooth" id="marketing-landing-page">
+        {/* Navbar */}
+        <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-4 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-3">
+            <span className="font-black text-xl tracking-wider text-gray-900">Oidaq</span>
+          </div>
+          <div className="hidden md:flex items-center gap-8 text-xs font-bold text-gray-500 uppercase tracking-wider">
+            <a href="#challenges" className="hover:text-indigo-600 transition-colors">Challenges</a>
+            <a href="#pricing" className="hover:text-indigo-600 transition-colors">Pricing</a>
+            <a href="#contact" className="hover:text-indigo-600 transition-colors">Contact</a>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                setShowForgotPassword(false);
+                setShowLogin(true);
+              }}
+              className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-bold transition-all"
+            >
+              Sign In
+            </button>
+          </div>
+        </nav>
+
+        {/* Hero Section */}
+        <section className="relative px-6 py-20 md:py-32 flex flex-col items-center text-center overflow-hidden max-w-5xl mx-auto space-y-6">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-indigo-200/30 blur-[120px] rounded-full -z-10" />
+          
+          <h1 className="text-4xl md:text-6xl font-black text-gray-900 tracking-tight leading-none max-w-4xl">
+            Put Your Client Chats <br className="hidden md:inline" /> & Bookings on Autopilot.
+          </h1>
+
+          <p className="text-sm md:text-lg text-gray-500 max-w-2xl font-medium leading-relaxed">
+            Automatically dispatch reminders, request customer reviews on WhatsApp, and optimize social media ads with zero middle-man commissions. Fully localized for guesthouses, spas, salons, and clinics.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center gap-3 pt-4 w-full justify-center">
+            <button
+              onClick={() => {
+                setShowForgotPassword(false);
+                setShowLogin(true);
+              }}
+              className="w-full sm:w-auto px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl text-sm shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2"
+            >
+              <Zap className="h-4 w-4" />
+              Sign In to Workspace
+            </button>
+          </div>
+        </section>
+
+        {/* Challenges Section */}
+        <section id="challenges" className="px-6 py-20 bg-white border-y border-gray-100">
+          <div className="max-w-5xl mx-auto space-y-16">
+            <div className="text-center space-y-4">
+              <h2 className="text-3xl md:text-5xl font-black text-indigo-950 tracking-tight leading-none">
+                SOLVE TODAY. <span className="text-indigo-600">GROW TOMORROW.</span>
+              </h2>
+              <p className="text-sm md:text-base text-gray-500 max-w-xl mx-auto font-medium">
+                We turn your biggest business challenges into growth opportunities.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+              {/* Struggling With */}
+              <div className="space-y-6">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-50 border border-red-100 rounded-lg text-red-700 text-xs font-black uppercase tracking-wider">
+                  Struggling With:
+                </div>
+
+                <div className="space-y-5">
+                  <div className="flex gap-4">
+                    <div className="flex-shrink-0 w-10 h-10 bg-red-50 text-red-600 rounded-full flex items-center justify-center font-bold">
+                      <Users className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900 text-sm">Losing Customers?</h4>
+                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">Poor engagement and experience make customers go elsewhere.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4">
+                    <div className="flex-shrink-0 w-10 h-10 bg-red-50 text-red-600 rounded-full flex items-center justify-center font-bold">
+                      <Info className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900 text-sm">Late Replies?</h4>
+                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">Slow responses mean lost trust and missed sales.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4">
+                    <div className="flex-shrink-0 w-10 h-10 bg-red-50 text-red-600 rounded-full flex items-center justify-center font-bold">
+                      <DollarSign className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900 text-sm">Spending More on Ads?</h4>
+                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">High ad costs with low results? You're not alone.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4">
+                    <div className="flex-shrink-0 w-10 h-10 bg-red-50 text-red-600 rounded-full flex items-center justify-center font-bold">
+                      <Sparkles className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900 text-sm">Lack of Reviews?</h4>
+                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">No reviews, no trust. It's time to build your reputation.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4">
+                    <div className="flex-shrink-0 w-10 h-10 bg-red-50 text-red-600 rounded-full flex items-center justify-center font-bold">
+                      <TrendingUp className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900 text-sm">Fewer Customers?</h4>
+                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">Low visibility and weak strategy limit your growth.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* We Help You */}
+              <div className="bg-indigo-950 text-white rounded-3xl p-8 md:p-10 space-y-6 shadow-xl relative overflow-hidden">
+                <div className="absolute -right-16 -bottom-16 w-48 h-48 bg-indigo-800/30 rounded-full blur-[60px]" />
+                
+                <h3 className="text-lg font-black tracking-tight uppercase border-b border-indigo-900 pb-3 flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-indigo-400" />
+                  We Help You:
+                </h3>
+
+                <ul className="space-y-4 text-xs font-semibold">
+                  <li className="flex items-center gap-3">
+                    <div className="w-6 h-6 bg-indigo-900 rounded-lg flex items-center justify-center text-indigo-400">
+                      <Check className="h-4 w-4" />
+                    </div>
+                    Keep customers coming back
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <div className="w-6 h-6 bg-indigo-900 rounded-lg flex items-center justify-center text-indigo-400">
+                      <Check className="h-4 w-4" />
+                    </div>
+                    Reply faster & close more deals
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <div className="w-6 h-6 bg-indigo-900 rounded-lg flex items-center justify-center text-indigo-400">
+                      <Check className="h-4 w-4" />
+                    </div>
+                    Run ads that actually convert
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <div className="w-6 h-6 bg-indigo-900 rounded-lg flex items-center justify-center text-indigo-400">
+                      <Check className="h-4 w-4" />
+                    </div>
+                    Get more reviews & build trust
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <div className="w-6 h-6 bg-indigo-900 rounded-lg flex items-center justify-center text-indigo-400">
+                      <Check className="h-4 w-4" />
+                    </div>
+                    Attract more customers
+                  </li>
+                </ul>
+
+                <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider text-center border-t border-indigo-900 pt-4">
+                  Smart strategies. Real results. Lasting growth.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Pricing Section */}
+        <section id="pricing" className="px-6 py-20 bg-gray-50">
+          <div className="max-w-5xl mx-auto space-y-12">
+            <div className="text-center space-y-3">
+              <h2 className="text-2xl md:text-4xl font-black text-gray-900 tracking-tight">Simple, Predictable Plans</h2>
+              <p className="text-xs md:text-sm text-gray-400 font-medium">All plans run on isolated cloud worker instances with zero shared resource limits.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {/* Tier 1 */}
+              <div className="border border-gray-100 bg-white rounded-3xl p-8 space-y-6 flex flex-col justify-between hover:shadow-md transition-all">
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="font-bold text-gray-800 text-base">Starter</h3>
+                    <p className="text-xs text-gray-400 mt-1">Perfect for small boutique setups or salons.</p>
+                  </div>
+                  <div className="text-2xl font-black text-gray-900 font-mono">
+                    R 499 <span className="text-xs text-gray-400 font-sans font-normal">/ month</span>
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 rounded-lg text-amber-700 text-[10px] font-bold uppercase w-fit">
+                    Self-Managed (You run campaigns yourself)
+                  </div>
+                  <ul className="text-xs text-gray-500 space-y-2.5 font-medium pt-2">
+                    <li className="flex items-center gap-2"><Check className="h-4 w-4 text-indigo-600" /> Unlimited monthly bookings</li>
+                    <li className="flex items-center gap-2"><Check className="h-4 w-4 text-indigo-600" /> WhatsApp reminder templates</li>
+                    <li className="flex items-center gap-2"><Check className="h-4 w-4 text-indigo-600" /> Bulk WhatsApp campaign blasts</li>
+                    <li className="flex items-center gap-2"><Check className="h-4 w-4 text-indigo-600" /> Smart Facebook Ads advisor</li>
+                  </ul>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setShowLogin(true);
+                  }}
+                  className="w-full py-3 bg-gray-950 hover:bg-gray-900 text-white font-bold rounded-xl text-xs transition-all mt-6"
+                >
+                  Get Started
+                </button>
+              </div>
+
+              {/* Tier 2 */}
+              <div className="border-2 border-indigo-600 bg-white rounded-3xl p-8 space-y-6 flex flex-col justify-between hover:shadow-lg transition-all relative">
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-indigo-600 text-white font-extrabold text-[9px] uppercase tracking-widest px-3 py-1 rounded-full">
+                  MOST POPULAR
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="font-bold text-gray-800 text-base">Professional</h3>
+                    <p className="text-xs text-gray-400 mt-1">For scaling guesthouses, car rents, and clinics.</p>
+                  </div>
+                  <div className="text-3xl font-black text-gray-900 font-mono">
+                    R 1,499 <span className="text-xs text-gray-400 font-sans font-normal">/ month</span>
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 rounded-lg text-indigo-700 text-[10px] font-bold uppercase w-fit">
+                    Fully Managed (We manage your campaigns)
+                  </div>
+                  <ul className="text-xs text-gray-500 space-y-2.5 font-medium pt-2">
+                    <li className="flex items-center gap-2"><Check className="h-4 w-4 text-indigo-600" /> Unlimited monthly bookings</li>
+                    <li className="flex items-center gap-2"><Check className="h-4 w-4 text-indigo-600" /> WhatsApp reminder templates</li>
+                    <li className="flex items-center gap-2"><Check className="h-4 w-4 text-indigo-600" /> Bulk WhatsApp campaign blasts</li>
+                    <li className="flex items-center gap-2"><Check className="h-4 w-4 text-indigo-600" /> Smart Facebook Ads advisor</li>
+                  </ul>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setShowLogin(true);
+                  }}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition-all mt-6 shadow-md shadow-indigo-600/10"
+                >
+                  Get Started
+                </button>
+              </div>
+
+              {/* Tier 3 */}
+              <div className="border border-gray-100 bg-white rounded-3xl p-8 space-y-6 flex flex-col justify-between hover:shadow-md transition-all">
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="font-bold text-gray-800 text-base">Enterprise</h3>
+                    <p className="text-xs text-gray-400 mt-1">For multi-location brands and hotels.</p>
+                  </div>
+                  <div className="text-2xl font-black text-gray-900">
+                    Custom <span className="text-xs text-gray-400 font-sans font-normal">Pricing</span>
+                  </div>
+                  <ul className="text-xs text-gray-500 space-y-2.5 font-medium pt-4">
+                    <li className="flex items-center gap-2"><Check className="h-4 w-4 text-indigo-600" /> Multi-location dashboards</li>
+                    <li className="flex items-center gap-2"><Check className="h-4 w-4 text-indigo-600" /> Custom domain configuration</li>
+                    <li className="flex items-center gap-2"><Check className="h-4 w-4 text-indigo-600" /> Dedicated onboarding support</li>
+                  </ul>
+                </div>
+                <a
+                  href="mailto:support@oidaq.online"
+                  className="w-full py-3 bg-gray-950 hover:bg-gray-900 text-white text-center font-bold rounded-xl text-xs transition-all mt-6 block"
+                >
+                  Contact Sales
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Contact Section */}
+        <section id="contact" className="px-6 py-20 bg-white border-t border-gray-100">
+          <div className="max-w-3xl mx-auto text-center space-y-8">
+            <h2 className="text-2xl md:text-3xl font-black text-indigo-950 tracking-tight">Let's Grow Together</h2>
+            <p className="text-xs text-gray-400 max-w-md mx-auto">Get in touch with our team to request a setup, custom feature, or consultation.</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 text-xs font-bold">
+              <div className="p-6 bg-gray-50 border border-gray-100 rounded-3xl flex flex-col items-center justify-center gap-3">
+                <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600">
+                  <Smartphone className="h-5 w-5" />
+                </div>
+                <span>Call / WhatsApp</span>
+                <a href="https://wa.me/26771504283" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 transition-colors font-mono">
+                  +267 71504283
+                </a>
+              </div>
+              <div className="p-6 bg-gray-50 border border-gray-100 rounded-3xl flex flex-col items-center justify-center gap-3">
+                <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600">
+                  <Info className="h-5 w-5" />
+                </div>
+                <span>Email Support</span>
+                <a href="mailto:support@oidaq.online" className="text-indigo-600 hover:text-indigo-800 transition-colors font-mono">
+                  support@oidaq.online
+                </a>
+              </div>
+              <div className="p-6 bg-gray-50 border border-gray-100 rounded-3xl flex flex-col items-center justify-center gap-3">
+                <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600">
+                  <Bed className="h-5 w-5" />
+                </div>
+                <span>Website Platform</span>
+                <a href="https://www.oidaq.online" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 transition-colors font-mono">
+                  www.oidaq.online
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Footer */}
+        <footer className="bg-gray-950 text-gray-500 text-center py-10 px-6 border-t border-gray-900 text-xs">
+          <p>© {new Date().getFullYear()} Oidaq. All rights reserved.</p>
+        </footer>
+      </div>
+    );
+  };
+
   // Render Login state first
   if (!user) {
+    if (!showLogin) {
+      return (
+        <>
+          {renderLandingPage()}
+          {renderToast()}
+        </>
+      );
+    }
+
     return (
       <>
         <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans antialiased" id="login-layout">
-        <div className="sm:mx-auto sm:w-full sm:max-w-md space-y-3 text-center" id="login-header-block">
+          {/* Back to Home Button */}
+          <div className="sm:mx-auto sm:w-full sm:max-w-md text-left px-2 mb-4">
+            <button 
+              onClick={() => {
+                setShowForgotPassword(false);
+                setShowLogin(false);
+              }}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-gray-900 transition-colors"
+            >
+              ← Back to Home
+            </button>
+          </div>
+          <div className="sm:mx-auto sm:w-full sm:max-w-md space-y-3 text-center" id="login-header-block">
           <div className="inline-flex p-3 bg-gray-900 rounded-2xl text-white shadow-md mx-auto" id="logo-icon-bg">
             <Bed className="h-6 w-6" />
           </div>
@@ -511,53 +862,7 @@ export default function App() {
               </form>
             )}
 
-            <div className="relative flex py-2 items-center" id="divider">
-              <div className="flex-grow border-t border-gray-100"></div>
-              <span className="flex-shrink mx-4 text-[10px] text-gray-400 font-bold uppercase">One-Click Testing Roles</span>
-              <div className="flex-grow border-t border-gray-100"></div>
-            </div>
 
-            {/* Quick Presets Grid */}
-            <div className="grid grid-cols-1 gap-2.5" id="preset-grid">
-              <button
-                onClick={() => triggerQuickLogin('sarah@pinecrest.com', 'pine123')}
-                className="w-full p-3 bg-gray-50 hover:bg-gray-100/75 rounded-xl border border-gray-100 text-left transition-all flex items-center justify-between"
-                id="preset-pine-admin"
-              >
-                <div className="space-y-0.5" id="preset-meta-1">
-                  <span className="text-[11px] font-bold text-gray-800 block">Pinecrest Ridge (Admin)</span>
-                  <span className="text-[9px] text-gray-400 block font-mono">sarah@pinecrest.com (pine123)</span>
-                </div>
-                <ChevronRight className="h-4 w-4 text-gray-400" />
-              </button>
-
-              <button
-                onClick={() => triggerQuickLogin('john@pinecrest.com', 'pine123')}
-                className="w-full p-3 bg-gray-50 hover:bg-gray-100/75 rounded-xl border border-gray-100 text-left transition-all flex items-center justify-between"
-                id="preset-pine-sales"
-              >
-                <div className="space-y-0.5" id="preset-meta-2">
-                  <span className="text-[11px] font-bold text-gray-800 block">Pinecrest Ridge (Sales Rep)</span>
-                  <span className="text-[9px] text-gray-400 block font-mono">john@pinecrest.com (pine123)</span>
-                </div>
-                <ChevronRight className="h-4 w-4 text-gray-400" />
-              </button>
-
-              <button
-                onClick={() => triggerQuickLogin('admin@guesthousesaas.com', 'admin123')}
-                className="w-full p-3 bg-indigo-50 hover:bg-indigo-100/75 rounded-xl border border-indigo-100 text-left transition-all flex items-center justify-between"
-                id="preset-saas-super"
-              >
-                <div className="space-y-0.5" id="preset-meta-3">
-                  <span className="text-[11px] font-bold text-indigo-950 block flex items-center gap-1.5">
-                    <ShieldCheck className="h-3.5 w-3.5 text-indigo-600" />
-                    SaaS Super Overseer (Dev Admin)
-                  </span>
-                  <span className="text-[9px] text-indigo-500/80 block font-mono">admin@guesthousesaas.com (admin123)</span>
-                </div>
-                <ChevronRight className="h-4 w-4 text-indigo-400" />
-              </button>
-            </div>
           </div>
         </div>
       </div>

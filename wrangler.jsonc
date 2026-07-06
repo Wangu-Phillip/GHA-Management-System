@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "gha-management",
+  "name": "oidaq-main",
   "main": "src/worker.ts",
   "compatibility_date": "2025-05-01",
   "compatibility_flags": [
@@ -14,11 +14,14 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "gha-management-db",
-      "database_id": "07b8049c-8bf7-426e-bb75-bad2f47a8cb1",
+      "database_name": "oidaq-demo-db",
+      "database_id": "3d72e4a5-bb89-4151-a8cd-b8d4f6c51150",
       "migrations_dir": "migrations"
     }
   ],
+  "vars": {
+    "ENVIRONMENT": "production"
+  },
   "ai": {
     "binding": "AI"
   },
@@ -29,12 +32,12 @@
     // ----------------------------------------------------
     // INSTANCE: Sunset Lodge
     // ----------------------------------------------------
-    "sunset-lodge": {
-      "name": "gha-sunset-lodge",
+    "sunset-breeze": {
+      "name": "gha-sunset-breeze",
       "d1_databases": [
         {
           "binding": "DB",
-          "database_name": "gha-db-sunset-lodge",
+          "database_name": "gha-db-sunset-breeze",
           "database_id": "sunset-d1-uuid-here",
           "migrations_dir": "migrations"
         }
