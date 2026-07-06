@@ -601,15 +601,12 @@ export default function App() {
                     <li className="flex items-center gap-2"><Check className="h-4 w-4 text-indigo-600" /> Smart Facebook Ads advisor</li>
                   </ul>
                 </div>
-                <button
-                  onClick={() => {
-                    setShowForgotPassword(false);
-                    setShowLogin(true);
-                  }}
-                  className="w-full py-3 bg-gray-950 hover:bg-gray-900 text-white font-bold rounded-xl text-xs transition-all mt-6"
+                <a
+                  href="mailto:wanguphillip@gmail.com?subject=Oidaq%20Starter%20Plan%20Inquiry"
+                  className="w-full py-3 bg-gray-950 hover:bg-gray-900 text-white text-center font-bold rounded-xl text-xs transition-all mt-6 block"
                 >
                   Get Started
-                </button>
+                </a>
               </div>
 
               {/* Tier 2 */}
@@ -635,15 +632,12 @@ export default function App() {
                     <li className="flex items-center gap-2"><Check className="h-4 w-4 text-indigo-600" /> Smart Facebook Ads advisor</li>
                   </ul>
                 </div>
-                <button
-                  onClick={() => {
-                    setShowForgotPassword(false);
-                    setShowLogin(true);
-                  }}
-                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition-all mt-6 shadow-md shadow-indigo-600/10"
+                <a
+                  href="mailto:wanguphillip@gmail.com?subject=Oidaq%20Professional%20Plan%20Inquiry"
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white text-center font-bold rounded-xl text-xs transition-all mt-6 shadow-md shadow-indigo-600/10 block"
                 >
                   Get Started
-                </button>
+                </a>
               </div>
 
               {/* Tier 3 */}
@@ -663,7 +657,7 @@ export default function App() {
                   </ul>
                 </div>
                 <a
-                  href="mailto:support@oidaq.online"
+                  href="mailto:wanguphillip@gmail.com?subject=Oidaq%20Enterprise%20Plan%20Inquiry"
                   className="w-full py-3 bg-gray-950 hover:bg-gray-900 text-white text-center font-bold rounded-xl text-xs transition-all mt-6 block"
                 >
                   Contact Sales
